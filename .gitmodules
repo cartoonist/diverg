@@ -1,0 +1,12 @@
+[submodule "ext/kokkos"]
+	path = ext/kokkos
+	url = https://github.com/kokkos/kokkos.git
+[submodule "ext/kokkos-kernels"]
+	path = ext/kokkos-kernels
+	url = https://github.com/kokkos/kokkos-kernels.git
+[submodule "ext/gum"]
+	path = ext/gum
+	url = https://github.com/cartoonist/gum.git
+[submodule "test/ext/catch2"]
+	path = test/ext/catch2
+	url = https://github.com/philsquared/Catch.git
