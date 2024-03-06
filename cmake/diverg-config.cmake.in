@@ -1,0 +1,15 @@
+@PACKAGE_INIT@
+
+include(CMakeFindDependencyMacro)
+find_dependency(Kokkos REQUIRED)
+find_dependency(KokkosKernels REQUIRED)
+find_dependency(gum REQUIRED)
+
+if(NOT TARGET diverg::diverg)
+  include("${CMAKE_CURRENT_LIST_DIR}/diverg-targets.cmake")
+endif()
+
+check_required_components(diverg)
+
+include("${CMAKE_CURRENT_LIST_DIR}/diverg-config-version.cmake")
+message(STATUS "Found diverg (version ${PACKAGE_VERSION})")
