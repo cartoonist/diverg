@@ -9,15 +9,15 @@
  *
  *  @internal
  *       Created:  Tue Jun 20, 2023  22:23
- *  Organization:  Max-Planck-Institut fuer Informatik
- *     Copyright:  Copyright (c) 2019, Ali Ghaffaari
+ *  Organization:  Universität Bielefeld
+ *     Copyright:  Copyright (c) 2023, Ali Ghaffaari
  *
  *  This source code is released under the terms of the MIT License.
  *  See LICENSE file for more information.
  */
 
-#ifndef PSI_HBITVECTOR_HPP_
-#define PSI_HBITVECTOR_HPP_
+#ifndef DIVERG_HBITVECTOR_HPP_
+#define DIVERG_HBITVECTOR_HPP_
 
 #include <climits>
 #include <cstdint>
@@ -30,7 +30,7 @@
 #include "range_sparse_base.hpp"
 
 
-namespace psi {
+namespace diverg {
   template< typename TDevice >
   struct HBitVectorTraits {
     using size_type = uint32_t;
@@ -854,7 +854,7 @@ namespace psi {
         }
       }
   };
-}  /* --- end of namespace psi --- */
+}  /* --- end of namespace diverg --- */
 
 
-#endif // PSI_HBITVECTOR_HPP_
+#endif // DIVERG_HBITVECTOR_HPP_

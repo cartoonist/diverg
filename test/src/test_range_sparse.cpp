@@ -18,21 +18,21 @@
 #include <KokkosSparse_spadd.hpp>
 #include <gum/graph.hpp>
 #include <gum/gfa_utils.hpp>
-#include <psi/range_sparse.hpp>
-#include <psi/graph.hpp>
+#include <diverg/range_sparse.hpp>
+#include <diverg/dindex.hpp>
 #include <string>
 
 #include "test_base.hpp"
 
 
-using namespace psi;
+using namespace diverg;
 
 SCENARIO( "Sanity check of Kokkos views created by CRSMatrix", "[range_sparse]" )
 {
   typedef int scalar_t;
   typedef Kokkos::DefaultHostExecutionSpace host_space;
   typedef KokkosSparse::CrsMatrix< scalar_t, int32_t, host_space > xcrsmatrix_t;
-  typedef psi::CRSMatrix< psi::crs_matrix::RangeDynamic, bool, uint32_t, uint64_t > range_crsmatrix_t;
+  typedef diverg::CRSMatrix< diverg::crs_matrix::RangeDynamic, bool, uint32_t, uint64_t > range_crsmatrix_t;
   typedef gum::SeqGraph< gum::Succinct > graph_type;
 
   GIVEN( "A sequence graph" )
@@ -41,7 +41,7 @@ SCENARIO( "Sanity check of Kokkos views created by CRSMatrix", "[range_sparse]" 
     graph_type graph;
     gum::util::load( graph, graph_path, gum::util::GFAFormat{}, true );
 
-    auto a = psi::util::adjacency_matrix< xcrsmatrix_t >( graph );
+    auto a = diverg::util::adjacency_matrix< xcrsmatrix_t >( graph );
     range_crsmatrix_t ra( a );
 
     WHEN( "Create a Kokkos view on host for CRSMatrix" )
@@ -283,7 +283,7 @@ is_same_host( TXCRSMatrix& x_mat, TRCRSMatrix& r_mat )
   {
     ordinal_type num_matches = 0;
     Kokkos::parallel_reduce(
-        "psi::test_range_sparse::compare_rowmap",
+        "diverg::test_range_sparse::compare_rowmap",
         Kokkos::RangePolicy< host_space >( 0, x_mat.numRows() + 1 ),
         KOKKOS_LAMBDA( const uint64_t i, ordinal_type& l_nm ) {
           if ( x_mat.graph.row_map( i ) == b_mat.rowMap( i ) ) ++l_nm;
@@ -296,7 +296,7 @@ is_same_host( TXCRSMatrix& x_mat, TRCRSMatrix& r_mat )
   {
     size_type num_matches = 0;
     Kokkos::parallel_reduce(
-        "psi::test_range_sparse::compare_entries",
+        "diverg::test_range_sparse::compare_entries",
         Kokkos::RangePolicy< host_space >( 0, x_mat.nnz() ),
         KOKKOS_LAMBDA( const uint64_t i, size_type& l_nm ) {
           if ( x_mat.graph.entries( i ) == b_mat.entry( i ) ) ++l_nm;
@@ -353,14 +353,14 @@ kokkos_kernels_spgemm( TXCRSMatrix const& a, TXCRSMatrix const& b )
   TXCRSMatrix c;
 
   {
-#ifdef PSI_STATS
+#ifdef DIVERG_STATS
     Kokkos::Timer timer;
 #endif
 
     KokkosSparse::spgemm_symbolic( handle, a, false, b, false, c );
     execution_space{}.fence();
 
-#ifdef PSI_STATS
+#ifdef DIVERG_STATS
     auto duration = timer.seconds();
     std::cout << "Kokkos::SpGEMM_symbolic time: " << duration * 1000 << "ms"
               << std::endl;
@@ -368,14 +368,14 @@ kokkos_kernels_spgemm( TXCRSMatrix const& a, TXCRSMatrix const& b )
   }
 
   {
-#ifdef PSI_STATS
+#ifdef DIVERG_STATS
     Kokkos::Timer timer;
 #endif
 
     KokkosSparse::spgemm_numeric( handle, a, false, b, false, c );
     execution_space{}.fence();
 
-#ifdef PSI_STATS
+#ifdef DIVERG_STATS
     auto duration = timer.seconds();
     std::cout << "Kokkos::SpGEMM_numeric time: " << duration * 1000 << "ms"
               << std::endl;
@@ -385,7 +385,7 @@ kokkos_kernels_spgemm( TXCRSMatrix const& a, TXCRSMatrix const& b )
   handle.destroy_spgemm_handle();
 
 //  Kokkos::parallel_for(
-//      "psi::test_range_sparse::set_values",
+//      "diverg::test_range_sparse::set_values",
 //      Kokkos::RangePolicy< execution_space >( 0, c.nnz() ),
 //      KOKKOS_LAMBDA ( const uint64_t i ) {
 //        c.values( i ) = 1;
@@ -413,14 +413,14 @@ kokkos_kernels_spadd( TXCRSMatrix const& a, TXCRSMatrix const& b )
   TXCRSMatrix c;
 
   {
-#ifdef PSI_STATS
+#ifdef DIVERG_STATS
     Kokkos::Timer timer;
 #endif
 
     KokkosSparse::spadd_symbolic( &handle, a, b, c );
     execution_space{}.fence();
 
-#ifdef PSI_STATS
+#ifdef DIVERG_STATS
     auto duration = timer.seconds();
     std::cout << "Kokkos::SpAdd_symbolic time: " << duration * 1000 << "ms"
               << std::endl;
@@ -428,14 +428,14 @@ kokkos_kernels_spadd( TXCRSMatrix const& a, TXCRSMatrix const& b )
   }
 
   {
-#ifdef PSI_STATS
+#ifdef DIVERG_STATS
     Kokkos::Timer timer;
 #endif
 
     KokkosSparse::spadd_numeric( &handle, 1, a, 1, b, c );
     execution_space{}.fence();
 
-#ifdef PSI_STATS
+#ifdef DIVERG_STATS
     auto duration = timer.seconds();
     std::cout << "Kokkos::SpGEMM_numeric time: " << duration * 1000 << "ms"
               << std::endl;
@@ -445,7 +445,7 @@ kokkos_kernels_spadd( TXCRSMatrix const& a, TXCRSMatrix const& b )
   handle.destroy_spadd_handle();
 
 //  Kokkos::parallel_for(
-//      "psi::test_range_sparse::set_values",
+//      "diverg::test_range_sparse::set_values",
 //      Kokkos::RangePolicy< execution_space >( 0, c.nnz() ),
 //      KOKKOS_LAMBDA ( const uint64_t i ) {
 //        c.values( i ) = 1;
@@ -460,7 +460,7 @@ kokkos_kernels_power( TXCRSMatrix const& a, unsigned int n )
 {
   assert( a.numRows() == a.numCols() );
 
-#ifdef PSI_STATS
+#ifdef DIVERG_STATS
   Kokkos::Timer timer;
 #endif
   auto c = create_identity_matrix< TXCRSMatrix >( a.numRows() );
@@ -475,7 +475,7 @@ kokkos_kernels_power( TXCRSMatrix const& a, unsigned int n )
 
   typename TXCRSMatrix::execution_space{}.fence();
 
-#ifdef PSI_STATS
+#ifdef DIVERG_STATS
   auto duration = timer.seconds();
   std::cout << "KokkosKernels::power time: " << duration * 1000 << "ms"
             << std::endl;
@@ -521,7 +521,7 @@ TEMPLATE_SCENARIO_SIG( "Validation and verification of range SpGEMM", "[range_sp
     std::string graph_path = test_data_dir + "/middle/m.gfa";
     graph_type graph;
     gum::util::load( graph, graph_path, gum::util::GFAFormat{}, true );
-    auto h_a = psi::util::adjacency_matrix< xcrs_host_mirror >( graph );
+    auto h_a = diverg::util::adjacency_matrix< xcrs_host_mirror >( graph );
     auto a = copy_xcrs< xcrsmatrix_t >( h_a );
     rcrsmatrix_t ra( h_a );
 
@@ -574,7 +574,7 @@ TEMPLATE_SCENARIO_SIG( "Validation and verification of range power", "[range_spa
     std::string graph_path = test_data_dir + "/middle/m.gfa";
     graph_type graph;
     gum::util::load( graph, graph_path, gum::util::GFAFormat{}, true );
-    auto h_a = psi::util::adjacency_matrix< xcrs_host_mirror >( graph );
+    auto h_a = diverg::util::adjacency_matrix< xcrs_host_mirror >( graph );
     auto a = copy_xcrs< xcrsmatrix_t >( h_a );
     rcrsmatrix_t ra( h_a );
 
@@ -630,7 +630,7 @@ TEMPLATE_SCENARIO_SIG( "Validation and verification of range SpAdd", "[range_spa
     std::string graph_path = test_data_dir + "/middle/m.gfa";
     graph_type graph;
     gum::util::load( graph, graph_path, gum::util::GFAFormat{}, true );
-    auto h_a = psi::util::adjacency_matrix< xcrs_host_mirror >( graph );
+    auto h_a = diverg::util::adjacency_matrix< xcrs_host_mirror >( graph );
     auto a = copy_xcrs< xcrsmatrix_t >( h_a );
     rcrsmatrix_t ra( h_a );
 

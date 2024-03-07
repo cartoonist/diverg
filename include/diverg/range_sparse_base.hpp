@@ -13,8 +13,8 @@
  *  See LICENSE file for more information.
  */
 
-#ifndef PSI_RANGE_SPARSE_BASE_HPP_
-#define PSI_RANGE_SPARSE_BASE_HPP_
+#ifndef DIVERG_RANGE_SPARSE_BASE_HPP_
+#define DIVERG_RANGE_SPARSE_BASE_HPP_
 
 #include <cstddef>
 #include <stdexcept>
@@ -24,7 +24,7 @@
 #include <Kokkos_NestedSort.hpp>
 
 
-namespace psi {
+namespace diverg {
   // Accumulator tag
   template< typename TSpec >
   struct Accumulator {
@@ -698,5 +698,5 @@ namespace psi {
     constexpr static int value = 16;
   };
   #endif
-}  // namespace psi
-#endif  // PSI_RANGE_SPARSE_BASE_HPP_
+}  // namespace diverg
+#endif  // DIVERG_RANGE_SPARSE_BASE_HPP_

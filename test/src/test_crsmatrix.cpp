@@ -4,11 +4,11 @@
  *
  *  Contains test cases for CRS matrix module.
  *
- *  @author  Ali Ghaffaari (\@cartoonist), <ali.ghaffaari@mpi-inf.mpg.de>
+ *  @author  Ali Ghaffaari (\@cartoonist), <ali.ghaffaari@uni-bielefeld.de>
  *
  *  @internal
  *       Created:  Thu Nov 12, 2020  23:20
- *  Organization:  Max-Planck-Institut fuer Informatik
+ *  Organization:  Universität Bielefeld
  *     Copyright:  Copyright (c) 2020, Ali Ghaffaari
  *
  *  This source code is released under the terms of the MIT License.
@@ -18,13 +18,14 @@
 #include <numeric>
 #include <algorithm>
 
-#include <psi/crs_matrix.hpp>
-#include <pairg/spgemm_utility.hpp>
+#include <diverg/random.hpp>
+#include <diverg/crs_matrix.hpp>
+#include <KokkosSparse_CrsMatrix.hpp>
 
 #include "test_base.hpp"
 
 
-using namespace psi;
+using namespace diverg;
 
 namespace test_util {
   template< typename TCRSMatrix >
@@ -85,7 +86,7 @@ namespace test_util {
 
     std::size_t nnz = 0;
     Kokkos::parallel_reduce(
-        "psi::test_crsmatrix::compute_nnz",
+        "diverg::test_crsmatrix::compute_nnz",
         Kokkos::MDRangePolicy< host_space, rank_type >( { 0, 0 }, { nrows, ncols } ),
         KOKKOS_LAMBDA ( const uint64_t i, const uint64_t j, std::size_t& l_nnz ) {
           if ( access( *mat_ptr, i, j ) == 1 ) l_nnz += 1;
@@ -113,7 +114,7 @@ namespace test_util {
     auto mat_ptr = &matrix;
 
     Kokkos::parallel_for(
-        "psi::test_crsmatrix::zero_matrix",
+        "diverg::test_crsmatrix::zero_matrix",
         Kokkos::MDRangePolicy< host_space, rank_type >( { 0, 0 }, { nrows, ncols } ),
         KOKKOS_LAMBDA ( const uint64_t i, const uint64_t j ) {
           ( *mat_ptr )[i][j] = 0;
@@ -239,7 +240,7 @@ namespace test_util {
     row_map_type rowmap( "rowmap", nrows + 1 );
 
     Kokkos::parallel_for(
-        "psi::test_crsmatrix::to_external_crs::set_values",
+        "diverg::test_crsmatrix::to_external_crs::set_values",
         Kokkos::RangePolicy< host_space >( 0, nnz ),
         KOKKOS_LAMBDA ( const uint64_t i ) {
           values( i ) = 1;  // boolean
@@ -248,7 +249,7 @@ namespace test_util {
     auto mat_ptr = &matrix;
 
     Kokkos::parallel_for(
-        "psi::test_crsmatrix::to_external_crs::count_row_nnz",
+        "diverg::test_crsmatrix::to_external_crs::count_row_nnz",
         policy_type( nrows, Kokkos::AUTO ),
         KOKKOS_LAMBDA ( const member_type& tm ) {
           auto i = tm.league_rank();
@@ -265,7 +266,7 @@ namespace test_util {
 
     rowmap( 0 ) = 0;
     Kokkos::parallel_scan(
-        "psi::test_crsmatrix::to_external_crs::computing_rowmap",
+        "diverg::test_crsmatrix::to_external_crs::computing_rowmap",
         Kokkos::RangePolicy< host_space >( 0, nrows ),
         KOKKOS_LAMBDA ( const uint64_t i, size_type& update, const bool final ) {
           // Load old value in case we update it before accumulating
@@ -276,7 +277,7 @@ namespace test_util {
         } );
 
     Kokkos::parallel_for(
-        "psi::test_crsmatrix::to_external_crs::fill_entries",
+        "diverg::test_crsmatrix::to_external_crs::fill_entries",
         Kokkos::RangePolicy< host_space >( 0, nrows ),
         KOKKOS_LAMBDA ( const uint64_t i ) {
           auto eidx = rowmap( i );
@@ -303,7 +304,7 @@ namespace test_util {
     auto block_ptr = &block;
 
     Kokkos::parallel_for(
-        "psi::test_crsmatrix::fill_block",
+        "diverg::test_crsmatrix::fill_block",
         Kokkos::MDRangePolicy< host_space, rank_type >(
             { 0, 0 }, { block.size(), block[ 0 ].size() } ),
         KOKKOS_LAMBDA ( const uint64_t i, const uint64_t j ) {
@@ -335,7 +336,7 @@ namespace test_util {
     std::size_t num_matches = 0;
 
     Kokkos::parallel_reduce(
-        "psi::test_crsmatrix::elem-wise-compare",
+        "diverg::test_crsmatrix::elem-wise-compare",
         Kokkos::MDRangePolicy< host_space, rank_type >( { 0, 0 }, { M, N } ),
         KOKKOS_LAMBDA ( const uint64_t i, const uint64_t j, std::size_t& l_nm ) {
           if ( access( *mat1_ptr, i, j ) == access( *mat2_ptr, i, j ) ) l_nm += 1;
@@ -365,7 +366,7 @@ namespace test_util {
     std::size_t num_matches = 0;
 
     Kokkos::parallel_reduce(
-        "psi::test_crsmatrix::crs_compare_entries",
+        "diverg::test_crsmatrix::crs_compare_entries",
         Kokkos::RangePolicy< host_space >( 0, entries_size ),
         KOKKOS_LAMBDA ( const uint64_t i, std::size_t& l_nm ) {
           if ( mat1_ptr->entry( i ) == mat2_ptr->entry( i ) ) l_nm += 1;
@@ -374,7 +375,7 @@ namespace test_util {
 
     num_matches = 0;
     Kokkos::parallel_reduce(
-        "psi::test_crsmatrix::crs_compare_rowmap",
+        "diverg::test_crsmatrix::crs_compare_rowmap",
         Kokkos::RangePolicy< host_space >( 0, nrows + 1 ),
         KOKKOS_LAMBDA ( const uint64_t i, std::size_t& l_nm ) {
           if ( mat1_ptr->rowMap( i ) == mat2_ptr->rowMap( i ) ) l_nm += 1;

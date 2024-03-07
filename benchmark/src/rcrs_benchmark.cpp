@@ -29,18 +29,14 @@
 #include <Kokkos_StdAlgorithms.hpp>
 #include <Kokkos_NestedSort.hpp>
 
-#include <psi/basic_types.hpp>
-#include <psi/utils.hpp>
-#include <psi/hbitvector.hpp>
-#include <psi/graph.hpp>
-#include <psi/range_sparse.hpp>
+#include <diverg/basic_types.hpp>
+#include <diverg/hbitvector.hpp>
+#include <diverg/dindex.hpp>
+#include <diverg/range_sparse.hpp>
 #include <gum/graph.hpp>
 #include <gum/io_utils.hpp>
 
-#include "vg/vg.pb.h"
-#include "vg/stream.hpp"
-
-using namespace psi;
+using namespace diverg;
 
 
 template< typename TXCRSMatrix1, typename TXCRSMatrix2 >
@@ -67,7 +63,7 @@ copy_xcrs( TXCRSMatrix2 mat )
   using dst_exec_space = typename dst_matrix_type::execution_space;
   using dst_graph_type   = typename dst_matrix_type::staticcrsgraph_type;
 
-#ifdef PSI_STATS
+#ifdef DIVERG_STATS
     Kokkos::Timer timer;
 #endif
 
@@ -95,7 +91,7 @@ copy_xcrs( TXCRSMatrix2 mat )
 
   dst_graph_type crs_graph( entries, row_map );
 
-#ifdef PSI_STATS
+#ifdef DIVERG_STATS
   auto duration = timer.seconds();
   std::cout << "copy time: " << duration * 1000 << "ms"
             << std::endl;
@@ -130,14 +126,14 @@ kokkos_kernels_spgemm( TXCRSMatrix const& a, TXCRSMatrix const& b )
   TXCRSMatrix c;
 
   {
-#ifdef PSI_STATS
+#ifdef DIVERG_STATS
     Kokkos::Timer timer;
 #endif
 
     KokkosSparse::spgemm_symbolic( handle, a, false, b, false, c );
     execution_space{}.fence();
 
-#ifdef PSI_STATS
+#ifdef DIVERG_STATS
     auto duration = timer.seconds();
     std::cout << "Kokkos::SpGEMM_symbolic time: " << duration * 1000 << "ms"
               << std::endl;
@@ -145,14 +141,14 @@ kokkos_kernels_spgemm( TXCRSMatrix const& a, TXCRSMatrix const& b )
   }
 
   {
-#ifdef PSI_STATS
+#ifdef DIVERG_STATS
     Kokkos::Timer timer;
 #endif
 
     KokkosSparse::spgemm_numeric( handle, a, false, b, false, c );
     execution_space{}.fence();
 
-#ifdef PSI_STATS
+#ifdef DIVERG_STATS
     auto duration = timer.seconds();
     std::cout << "Kokkos::SpGEMM_numeric time: " << duration * 1000 << "ms"
               << std::endl;
@@ -162,7 +158,7 @@ kokkos_kernels_spgemm( TXCRSMatrix const& a, TXCRSMatrix const& b )
   handle.destroy_spgemm_handle();
 
 //  Kokkos::parallel_for(
-//      "psi::test_range_sparse::set_values",
+//      "diverg::test_range_sparse::set_values",
 //      Kokkos::RangePolicy< execution_space >( 0, c.nnz() ),
 //      KOKKOS_LAMBDA ( const uint64_t i ) {
 //        c.values( i ) = 1;
@@ -190,14 +186,14 @@ kokkos_kernels_spadd( TXCRSMatrix const& a, TXCRSMatrix const& b )
   TXCRSMatrix c;
 
   {
-#ifdef PSI_STATS
+#ifdef DIVERG_STATS
     Kokkos::Timer timer;
 #endif
 
     KokkosSparse::spadd_symbolic( &handle, a, b, c );
     execution_space{}.fence();
 
-#ifdef PSI_STATS
+#ifdef DIVERG_STATS
     auto duration = timer.seconds();
     std::cout << "Kokkos::SpAdd_symbolic time: " << duration * 1000 << "ms"
               << std::endl;
@@ -205,14 +201,14 @@ kokkos_kernels_spadd( TXCRSMatrix const& a, TXCRSMatrix const& b )
   }
 
   {
-#ifdef PSI_STATS
+#ifdef DIVERG_STATS
     Kokkos::Timer timer;
 #endif
 
     KokkosSparse::spadd_numeric( &handle, 1, a, 1, b, c );
     execution_space{}.fence();
 
-#ifdef PSI_STATS
+#ifdef DIVERG_STATS
     auto duration = timer.seconds();
     std::cout << "Kokkos::SpAdd_numeric time: " << duration * 1000 << "ms"
               << std::endl;
@@ -222,7 +218,7 @@ kokkos_kernels_spadd( TXCRSMatrix const& a, TXCRSMatrix const& b )
   handle.destroy_spadd_handle();
 
 //  Kokkos::parallel_for(
-//      "psi::test_range_sparse::set_values",
+//      "diverg::test_range_sparse::set_values",
 //      Kokkos::RangePolicy< execution_space >( 0, c.nnz() ),
 //      KOKKOS_LAMBDA ( const uint64_t i ) {
 //        c.values( i ) = 1;
@@ -237,7 +233,7 @@ kokkos_kernels_power( TXCRSMatrix const& a, unsigned int n )
 {
   assert( a.numRows() == a.numCols() );
 
-#ifdef PSI_STATS
+#ifdef DIVERG_STATS
   Kokkos::Timer timer;
 #endif
   auto c = create_identity_matrix< TXCRSMatrix >( a.numRows() );
@@ -252,7 +248,7 @@ kokkos_kernels_power( TXCRSMatrix const& a, unsigned int n )
 
   typename TXCRSMatrix::execution_space{}.fence();
 
-#ifdef PSI_STATS
+#ifdef DIVERG_STATS
   auto duration = timer.seconds();
   std::cout << "KokkosKernels::power time: " << duration * 1000 << "ms"
             << std::endl;
@@ -280,24 +276,13 @@ benchmark_range_spgemm_graph( const std::string& graph_path, int d, bool verbose
   typedef KokkosSparse::CrsMatrix< scalar_t, ordinal_t, device_t > xcrsmatrix_t;
   typedef typename xcrsmatrix_t::HostMirror xcrs_host_mirror;
   typedef typename xcrsmatrix_t::size_type size_type;
-  typedef psi::CRSMatrix< psi::crs_matrix::RangeDynamic, bool, ordinal_t, size_type > range_crsmatrix_t;
+  typedef diverg::CRSMatrix< diverg::crs_matrix::RangeDynamic, bool, ordinal_t, size_type > range_crsmatrix_t;
   typedef gum::SeqGraph< gum::Succinct > graph_type;
 
-  // Loading input graph
-  auto parse_vg = []( std::istream& in ) -> vg::Graph {
-    vg::Graph merged;
-    std::function< void( vg::Graph& ) > handle_chunks =
-      [&]( vg::Graph& other ) {
-        gum::util::merge_vg( merged, static_cast< vg::Graph const& >( other ) );
-      };
-    stream::for_each( in, handle_chunks );
-    return merged;
-  };
   graph_type graph;
-  gum::ExternalLoader< vg::Graph > loader{ parse_vg };
 
   std::cout << "Loading input graph..." << std::endl;
-  gum::util::load( graph, graph_path, loader, true );
+  gum::util::load( graph, graph_path, true );
 
   std::cout << "Creating adjacency matrix..." << std::endl;
   std::vector< graph_type::rank_type > comp_ranks;
@@ -305,7 +290,7 @@ benchmark_range_spgemm_graph( const std::string& graph_path, int d, bool verbose
     comp_ranks.push_back( rank );
     return true;
   } );
-  auto h_a = psi::util::adjacency_matrix< xcrs_host_mirror >(
+  auto h_a = diverg::util::adjacency_matrix< xcrs_host_mirror >(
       graph, comp_ranks[ 0 ], comp_ranks[ 1 ] );
 
   std::cout << "Copying adjacency matrix to device..." << std::endl;
@@ -322,8 +307,8 @@ benchmark_range_spgemm_graph( const std::string& graph_path, int d, bool verbose
   execution_space{}.fence();
 
   //if ( verbose ) {
-  //  psi::print( a );
-  //  psi::print( c );
+  //  diverg::print( a );
+  //  diverg::print( c );
   //}
 
   config_type config;
@@ -337,7 +322,7 @@ benchmark_range_spgemm_graph( const std::string& graph_path, int d, bool verbose
             << " (" << rc.rowMap( rc.numRows() ) << ")" << std::endl;
 
   //if ( verbose ) {
-  //  psi::print( rc, std::string( "RC" ) );
+  //  diverg::print( rc, std::string( "RC" ) );
   //}
 }
 
@@ -398,7 +383,7 @@ parse_arguments( int argc, char* argv[] )
     else if ( ( strcmp( argv[ i ], "-h" ) == 0 ) || ( strcmp( argv[ i ], "--help" ) == 0 ) ) {
       std::cout << "  Options:\n"
                 << "  * Adjacency matrix as input\n"
-                << "    --graph (-g) <path>: file path, determines input graph file path (gfa, vg)\n"
+                << "    --graph (-g) <path>: file path, determines input graph file path (gfa)\n"
                 << "    --dist (-d) <int>:   outer distance, i.e. fragment size (required)\n"
                 << "  * Random matrix as input\n"
                 << "    --order (-n) <int>:  exponent num, determines number of rows 2^num (default: 2^12 = 4096)\n"

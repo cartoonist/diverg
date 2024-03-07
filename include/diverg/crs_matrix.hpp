@@ -4,19 +4,19 @@
  *
  *  This header file defines CRS matrix template class.
  *
- *  @author  Ali Ghaffaari (\@cartoonist), <ali.ghaffaari@mpi-inf.mpg.de>
+ *  @author  Ali Ghaffaari (\@cartoonist), <ali.ghaffaari@uni-bielefeld.de>
  *
  *  @internal
  *       Created:  Tue Nov 10, 2020  23:32
- *  Organization:  Max-Planck-Institut fuer Informatik
+ *  Organization:  Universität Bielefeld
  *     Copyright:  Copyright (c) 2020, Ali Ghaffaari
  *
  *  This source code is released under the terms of the MIT License.
  *  See LICENSE file for more information.
  */
 
-#ifndef PSI_CRS_MATRIX_HPP__
-#define PSI_CRS_MATRIX_HPP__
+#ifndef DIVERG_CRS_MATRIX_HPP__
+#define DIVERG_CRS_MATRIX_HPP__
 
 #include <cinttypes>
 #include <vector>
@@ -32,7 +32,7 @@
 #include "utils.hpp"
 
 
-namespace psi {
+namespace diverg {
   /* specialisation tags */
   namespace crs_matrix {
     // Group specialisation tags
@@ -141,7 +141,7 @@ namespace psi {
 
       size_type nnz_counter = 0;
       Kokkos::parallel_reduce(
-          "psi::crs_matrix::nnz_range", policy_type( 0, ent_size / 2 ),
+          "diverg::crs_matrix::nnz_range", policy_type( 0, ent_size / 2 ),
           KOKKOS_LAMBDA ( const uint64_t ii, size_type& nnz_local ) {
             nnz_local += d_entries( ii*2 + 1 ) - d_entries( ii*2 ) + 1;
           },
@@ -246,7 +246,7 @@ namespace psi {
       const size_type snnz = entries.size();
       auto ent_size = ex.graph.entries.extent( 0 );
       assert( ent_size == ex.nnz() );
-      psi::resize( entries, snnz + ent_size );
+      diverg::resize( entries, snnz + ent_size );
       auto ent_start = entries.begin() + snnz;
       std::transform( ex.graph.entries.data(), ex.graph.entries.data() + ent_size,
                       ent_start, [scol]( TOrdinal e ) { return e + scol; } );
@@ -1724,8 +1724,8 @@ namespace psi {
                                                      []( ext_value_type e ) -> uint64_t {
                                                        return static_cast< uint64_t >( e );
                                                      } );
-      psi::resize( this->rowmap, matrix.numRows() + 1 );
-      psi::clear( this->entries );
+      diverg::resize( this->rowmap, matrix.numRows() + 1 );
+      diverg::clear( this->entries );
       traits_type::assign( this->entries, this->rowmap, proxy_entries, matrix.rowmap,
                            ext_group_type{} );
       this->num_cols = matrix.num_cols;
@@ -1802,30 +1802,30 @@ namespace psi {
     inline void
     reserve( size_type nnz_est )
     {
-      psi::reserve( this->entries, nnz_est );
+      diverg::reserve( this->entries, nnz_est );
     }
 
     inline void
     shrink_to_fit( )
     {
-      psi::shrink_to_fit( this->entries );
-      psi::shrink_to_fit( this->rowmap );
+      diverg::shrink_to_fit( this->entries );
+      diverg::shrink_to_fit( this->rowmap );
     }
 
     inline void
     clear( )
     {
-      psi::clear( this->entries );
-      psi::clear( this->rowmap );
+      diverg::clear( this->entries );
+      diverg::clear( this->rowmap );
       this->num_cols = 0;
     }
 
     inline void
     serialize( std::ostream& out ) const
     {
-      psi::serialize( out, this->entries );
-      psi::serialize( out, this->rowmap );
-      psi::serialize( out, static_cast< uint64_t >( this->num_cols ) );
+      diverg::serialize( out, this->entries );
+      diverg::serialize( out, this->rowmap );
+      diverg::serialize( out, static_cast< uint64_t >( this->num_cols ) );
     }
 
     inline void
@@ -1833,9 +1833,9 @@ namespace psi {
     {
       this->clear();
       uint64_t ncols;
-      psi::deserialize( in, this->entries );
-      psi::deserialize( in, this->rowmap );
-      psi::deserialize( in, ncols );
+      diverg::deserialize( in, this->entries );
+      diverg::deserialize( in, this->rowmap );
+      diverg::deserialize( in, ncols );
       this->num_cols = ncols;
     }
   protected:
@@ -1853,7 +1853,7 @@ namespace psi {
     inline size_type
     build( TCrsMatrix&& ext )
     {
-      psi::resize( this->rowmap, ext.numRows() + 1 );
+      diverg::resize( this->rowmap, ext.numRows() + 1 );
       this->fill_partial( ext );
       return ext.nnz();
     }
@@ -1866,8 +1866,8 @@ namespace psi {
       // FIXME: An extra copy takes place here when views are on the same
       // device. Probably, a specialised CRSMatrix with an internal
       // `Kokkos::StaticCrsGraph` will resolve the issue.
-      psi::resize( this->entries, d_entries.extent( 0 ) );
-      psi::resize( this->rowmap, d_rowmap.extent( 0 ) );
+      diverg::resize( this->entries, d_entries.extent( 0 ) );
+      diverg::resize( this->rowmap, d_rowmap.extent( 0 ) );
       auto h_entries_view = CRSMatrixBase::entries_view< TDeviceSpace >( this->entries );
       auto h_rowmap_view = CRSMatrixBase::rowmap_view< TDeviceSpace >( this->rowmap );
       Kokkos::deep_copy( h_entries_view, d_entries );
@@ -1891,7 +1891,7 @@ namespace psi {
     build( ordinal_type nrows, ordinal_type ncols, TCallback callback, size_type nnz_est=0 )
     {
       if ( nnz_est ) this->reserve( nnz_est );
-      psi::resize( this->rowmap, nrows + 1 );
+      diverg::resize( this->rowmap, nrows + 1 );
       ordinal_type lrow = 0;  /* last filled row index */
       size_type tnnz = 0;
       auto partial_ctor =
@@ -2620,7 +2620,7 @@ namespace psi {
     serialize( std::ostream& out ) const
     {
       base_type::serialize( out );
-      psi::serialize( out, static_cast< uint64_t >( this->m_nnz ) );
+      diverg::serialize( out, static_cast< uint64_t >( this->m_nnz ) );
     }
 
     inline void
@@ -2628,7 +2628,7 @@ namespace psi {
     {
       base_type::load( in );
       uint64_t dnnz;
-      psi::deserialize( in, dnnz );
+      diverg::deserialize( in, dnnz );
       this->m_nnz = dnnz;
     }
   private:
@@ -2773,7 +2773,7 @@ namespace psi {
     serialize( std::ostream& out ) const
     {
       base_type::serialize( out );
-      psi::serialize( out, static_cast< uint64_t >( this->m_nnz ) );
+      diverg::serialize( out, static_cast< uint64_t >( this->m_nnz ) );
     }
 
     inline void
@@ -2781,7 +2781,7 @@ namespace psi {
     {
       base_type::load( in );
       uint64_t dnnz;
-      psi::deserialize( in, dnnz );
+      diverg::deserialize( in, dnnz );
       this->m_nnz = dnnz;
     }
   private:
@@ -2926,7 +2926,7 @@ namespace psi {
     serialize( std::ostream& out ) const
     {
       base_type::serialize( out );
-      psi::serialize( out, static_cast< uint64_t >( this->m_nnz ) );
+      diverg::serialize( out, static_cast< uint64_t >( this->m_nnz ) );
     }
 
     inline void
@@ -2934,7 +2934,7 @@ namespace psi {
     {
       base_type::load( in );
       uint64_t dnnz;
-      psi::deserialize( in, dnnz );
+      diverg::deserialize( in, dnnz );
       this->m_nnz = dnnz;
     }
   private:
@@ -3097,7 +3097,7 @@ namespace psi {
     serialize( std::ostream& out ) const
     {
       base_type::serialize( out );
-      psi::serialize( out, static_cast< uint64_t >( this->m_nnz ) );
+      diverg::serialize( out, static_cast< uint64_t >( this->m_nnz ) );
     }
 
     inline void
@@ -3105,7 +3105,7 @@ namespace psi {
     {
       base_type::load( in );
       uint64_t dnnz;
-      psi::deserialize( in, dnnz );
+      diverg::deserialize( in, dnnz );
       this->m_nnz = dnnz;
     }
   private:
@@ -3333,6 +3333,6 @@ namespace psi {
     return merge_distance_index< TMutableCRSMatrix >(
       dindex1, dindex2, typename crs_matrix::Group< typename TCRSMatrix::spec_type >::type{} );
   }
-}  /* --- end of namespace psi --- */
+}  /* --- end of namespace diverg --- */
 
-#endif  /* --- #ifndef PSI_CRS_MATRIX_HPP__ --- */
+#endif  /* --- #ifndef DIVERG_CRS_MATRIX_HPP__ --- */

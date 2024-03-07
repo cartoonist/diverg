@@ -13,8 +13,8 @@
  *  See LICENSE file for more information.
  */
 
-#ifndef PSI_RANGE_SPARSE_HPP_
-#define PSI_RANGE_SPARSE_HPP_
+#ifndef DIVERG_RANGE_SPARSE_HPP_
+#define DIVERG_RANGE_SPARSE_HPP_
 
 #include <iostream>
 #include <iomanip>
@@ -31,9 +31,10 @@
 #include "hbitvector.hpp"
 #include "basic_types.hpp"
 #include "utils.hpp"
+#include "random.hpp"
 
 
-namespace psi {
+namespace diverg {
   /**
    *  @brief  Print a matrix of type `KokkosSparse::CrsMatrix`.
    *
@@ -91,16 +92,16 @@ namespace psi {
   }
 
   /**
-   *  @brief  Print a matrix of type 'Range' spacialised `psi::CRSMatrix`.
+   *  @brief  Print a matrix of type 'Range' spacialised `diverg::CRSMatrix`.
    *
    *  NOTE: All Views associated with the matrix are assumed to be on host
    * memory space.
    */
   template< typename TSpec, typename TOrdinal, typename TSize >
   static /* void */ std::enable_if_t<
-      std::is_same< typename psi::crs_matrix::Group< TSpec >::type,
-                    psi::crs_matrix::RangeGroup >::value >
-  print( psi::CRSMatrix< TSpec, bool, TOrdinal, TSize >& m,
+      std::is_same< typename diverg::crs_matrix::Group< TSpec >::type,
+                    diverg::crs_matrix::RangeGroup >::value >
+  print( diverg::CRSMatrix< TSpec, bool, TOrdinal, TSize >& m,
          std::string label = {}, bool verbose = true, bool print_all = false )
   {
     if ( label.empty() ) label = "A";
@@ -153,7 +154,7 @@ namespace psi {
         Kokkos::ViewAllocateWithoutInitializing( "I_entries" ), n );
 
     Kokkos::parallel_for(
-        "psi::crs_matrix::create_identity_matrix", range_policy_t( 0, n ),
+        "diverg::crs_matrix::create_identity_matrix", range_policy_t( 0, n ),
         KOKKOS_LAMBDA ( const uint64_t i ) {
           i_values( i ) = 1;
           i_row_map( i + 1 ) = i + 1;
@@ -179,7 +180,7 @@ namespace psi {
         Kokkos::ViewAllocateWithoutInitializing( "I_rowmap" ), n + 1 );
 
     Kokkos::parallel_for(
-        "psi::crs_matrix::create_range_identity_matrix",
+        "diverg::crs_matrix::create_range_identity_matrix",
         range_policy_t( 0, n ), KOKKOS_LAMBDA ( const uint64_t ii ) {
           i_entries( ii * 2 ) = ii;
           i_entries( ii * 2 + 1 ) = ii;
@@ -191,7 +192,7 @@ namespace psi {
   /**
    *  @brief  Create the identity matrix of order `n` in RCRS format.
    *
-   *  NOTE: `TRCRSMatrix` should be a `psi::CRSMatrix`-like type from Range group.
+   *  NOTE: `TRCRSMatrix` should be a `diverg::CRSMatrix`-like type from Range group.
    */
   template< typename TRCRSMatrix, typename TExecSpace=Kokkos::DefaultExecutionSpace >
   inline TRCRSMatrix
@@ -261,11 +262,11 @@ namespace psi {
     h_a_row_map( 0 ) = 0;
 
     Kokkos::parallel_for(
-        "psi::crs_matrix::::create_random_matrix_on_host::random_values",
+        "diverg::crs_matrix::::create_random_matrix_on_host::random_values",
         Kokkos::RangePolicy< Kokkos::DefaultHostExecutionSpace >( 0, nnz ),
         KOKKOS_LAMBDA ( const uint64_t i ) {
           value_type v = 0;
-          while ( v == 0 ) v = psi::random::random_integer( lower, upper + 1 );
+          while ( v == 0 ) v = diverg::random::random_integer( lower, upper + 1 );
           h_a_values( i ) = v;
         } );
 
@@ -273,7 +274,7 @@ namespace psi {
       // Distributing nnz values into rows
       std::size_t i = 0;
       while ( i < nnz ) {
-        auto idx = psi::random::random_index( n );
+        auto idx = diverg::random::random_index( n );
         do {
           if ( h_a_row_map( idx + 1 ) < n ) {
             ++h_a_row_map( idx + 1 );
@@ -286,7 +287,7 @@ namespace psi {
 
       //for ( i = 1; i < n; ++i ) h_a_row_map( i + 1 ) += h_a_row_map( i );
       Kokkos::parallel_scan(
-          "psi::crs_matrix::::create_random_matrix_on_host::compute_row_map",
+          "diverg::crs_matrix::::create_random_matrix_on_host::compute_row_map",
           Kokkos::RangePolicy< Kokkos::DefaultHostExecutionSpace >( 0, n ),
           KOKKOS_LAMBDA ( const int i, size_type& update, const bool final ) {
             // Load old value in case we update it before accumulating
@@ -299,16 +300,16 @@ namespace psi {
     }
 
     Kokkos::parallel_for(
-        "psi::crs_matrix::::create_random_matrix_on_host::random_entries",
+        "diverg::crs_matrix::::create_random_matrix_on_host::random_entries",
         Kokkos::RangePolicy< Kokkos::DefaultHostExecutionSpace >( 0, n ),
         KOKKOS_LAMBDA ( const uint64_t i ) {
           auto l = h_a_row_map( i );
           auto u = h_a_row_map( i + 1 );
           auto begin = h_a_entries.data() + l;
           auto end = h_a_entries.data() + u;
-          std::sample( psi::RangeIterator< decltype( n ) >{ 0 },
-                       psi::RangeIterator{ n }, begin, u - l,
-                       psi::random::gen );
+          std::sample( diverg::RangeIterator< decltype( n ) >{ 0 },
+                       diverg::RangeIterator{ n }, begin, u - l,
+                       diverg::random::gen );
           std::sort( begin, end );
         } );
 
@@ -372,9 +373,9 @@ namespace psi {
     entries_t r_entries( Kokkos::ViewAllocateWithoutInitializing( "entries" ),
                          nnz );
 
-    random_pool_t random_pool( psi::random::rd() );
+    random_pool_t random_pool( diverg::random::rd() );
 
-    Kokkos::parallel_for( "psi::crs_matrix::create_random_matrix::random_values",
+    Kokkos::parallel_for( "diverg::crs_matrix::create_random_matrix::random_values",
                           range_policy_t( 0, nnz ),
                           KOKKOS_LAMBDA ( const uint64_t i ) {
                             generator_t generator = random_pool.get_state();
@@ -391,7 +392,7 @@ namespace psi {
 
     if ( nnz_per_row == n ) {  // if nnz = n*n (n*n may be really large to fit in an integer)
       Kokkos::parallel_for(
-          "psi::crs_matrix::create_random_matrix::fill_nnz",
+          "diverg::crs_matrix::create_random_matrix::fill_nnz",
           range_policy_t( 0, n ),
           KOKKOS_LAMBDA ( const uint64_t i ) { r_row_map( i + 1 ) = n; } );
     }
@@ -402,7 +403,7 @@ namespace psi {
       }
 
       Kokkos::parallel_for(
-          "psi::crs_matrix::create_random_matrix::distribute_nnz",
+          "diverg::crs_matrix::create_random_matrix::distribute_nnz",
           range_policy_t( 0, d_nnz ), KOKKOS_LAMBDA ( const uint64_t ) {
             generator_t generator = random_pool.get_state();
 
@@ -427,7 +428,7 @@ namespace psi {
 
       if ( d_nnz != nnz ) {
         Kokkos::parallel_for(
-            "psi::crs_matrix::create_random_matrix::reverse_nnz_dist",
+            "diverg::crs_matrix::create_random_matrix::reverse_nnz_dist",
             range_policy_t( 0, n ), KOKKOS_LAMBDA ( const uint64_t i ) {
               r_row_map( i + 1 ) = n - r_row_map( i + 1 );
             } );
@@ -435,7 +436,7 @@ namespace psi {
     }
 
     Kokkos::parallel_scan(
-        "psi::crs_matrix::create_random_matrix::compute_row_map",
+        "diverg::crs_matrix::create_random_matrix::compute_row_map",
         range_policy_t( 0, n ),
         KOKKOS_LAMBDA ( const int i, size_type& partial_sum,
                         const bool final ) {
@@ -448,7 +449,7 @@ namespace psi {
         } );
 
     Kokkos::parallel_for(
-        "psi::crs_matrix::create_random_matrix::random_entries",
+        "diverg::crs_matrix::create_random_matrix::random_entries",
         range_policy_t( 0, n ), KOKKOS_LAMBDA ( const uint64_t i ) {
           auto l = r_row_map( i );
           auto u = r_row_map( i + 1 );
@@ -474,7 +475,7 @@ namespace psi {
     auto func = SortEntriesFunctor( r_row_map, r_entries );
 
     Kokkos::parallel_for(
-        "psi::crs_matrix::create_random_matrix::sort_entries",
+        "diverg::crs_matrix::create_random_matrix::sort_entries",
         func.policy( n ), func );
 
     return xcrsmatrix_t( "Random Matrix", n, n, nnz, r_values, r_row_map,
@@ -494,7 +495,7 @@ namespace psi {
 
   /**
    *  @brief  Create a random binary matrix and return in both KokkosKernels
-   *          CRS and PSI Range CRS formats.
+   *          CRS and DIVERG Range CRS formats.
    */
   template< typename TXCRSMatrix, typename TRCRSMatrix >
   inline TXCRSMatrix
@@ -560,7 +561,7 @@ namespace psi {
     auto a_nrows = a_rowmap.extent( 0 ) - 1;
 
     Kokkos::parallel_for(
-        "psi::crs_matrix::range_spadd_symbolic::count_row_nnz",
+        "diverg::crs_matrix::range_spadd_symbolic::count_row_nnz",
         policy_type( 0, a_nrows ), KOKKOS_LAMBDA ( const uint64_t row ) {
           auto a_idx = a_rowmap( row );
           auto a_end = a_rowmap( row + 1 );
@@ -600,8 +601,8 @@ namespace psi {
               }
 
               if ( rs <= hi + 1 ) {  // merge
-                lo = PSI_MACRO_MIN( lo, rs );
-                hi = PSI_MACRO_MAX( hi, re );
+                lo = DIVERG_MACRO_MIN( lo, rs );
+                hi = DIVERG_MACRO_MAX( hi, re );
                 continue;
               }
               lo = rs;
@@ -624,8 +625,8 @@ namespace psi {
               }
 
               if ( rs <= hi + 1 ) {  // merge
-                lo = PSI_MACRO_MIN( lo, rs );
-                hi = PSI_MACRO_MAX( hi, re );
+                lo = DIVERG_MACRO_MIN( lo, rs );
+                hi = DIVERG_MACRO_MAX( hi, re );
                 continue;
               }
               count += 2;
@@ -641,7 +642,7 @@ namespace psi {
         } );
 
     Kokkos::parallel_scan(
-        "psi::crs_matrix::range_spadd_symbolic::computing_row_map_c",
+        "diverg::crs_matrix::range_spadd_symbolic::computing_row_map_c",
         policy_type( 0, a_nrows ),
         KOKKOS_LAMBDA ( const int i, size_type& update, const bool final ) {
           // Load old value in case we update it before accumulating
@@ -688,7 +689,7 @@ namespace psi {
     auto a_nrows = a_rowmap.extent( 0 ) - 1;
 
     Kokkos::parallel_for(
-        "psi::crs_matrix::range_spadd_numeric::count_row_nnz",
+        "diverg::crs_matrix::range_spadd_numeric::count_row_nnz",
         policy_type( 0, a_nrows ), KOKKOS_LAMBDA ( const uint64_t row ) {
           auto a_idx = a_rowmap( row );
           auto a_end = a_rowmap( row + 1 );
@@ -728,8 +729,8 @@ namespace psi {
               }
 
               if ( rs <= hi + 1 ) {  // merge
-                lo = PSI_MACRO_MIN( lo, rs );
-                hi = PSI_MACRO_MAX( hi, re );
+                lo = DIVERG_MACRO_MIN( lo, rs );
+                hi = DIVERG_MACRO_MAX( hi, re );
                 continue;
               }
               c_entries( c_idx++ ) = lo;
@@ -753,8 +754,8 @@ namespace psi {
               }
 
               if ( rs <= hi + 1 ) {  // merge
-                lo = PSI_MACRO_MIN( lo, rs );
-                hi = PSI_MACRO_MAX( hi, re );
+                lo = DIVERG_MACRO_MIN( lo, rs );
+                hi = DIVERG_MACRO_MAX( hi, re );
                 continue;
               }
               c_entries( c_idx++ ) = lo;
@@ -801,16 +802,16 @@ namespace psi {
         Kokkos::ViewAllocateWithoutInitializing( "c_rowmap" ),
         a_rowmap.extent( 0 ) );
 
-#ifdef PSI_STATS
+#ifdef DIVERG_STATS
     Kokkos::Timer timer;
 #endif
 
     range_spadd_symbolic( handle, a_rowmap, a_entries, b_rowmap, b_entries,
                           c_rowmap );
 
-#ifdef PSI_STATS
+#ifdef DIVERG_STATS
     double d = timer.seconds();
-    std::cout << "psi::range_spadd_symbolic time: " << d * 1000 << "ms"
+    std::cout << "diverg::range_spadd_symbolic time: " << d * 1000 << "ms"
               << std::endl;
 #endif
 
@@ -819,16 +820,16 @@ namespace psi {
     c_entries = c_entries_type( Kokkos::ViewAllocateWithoutInitializing( "C" ),
                                 c_rnnz );
 
-#ifdef PSI_STATS
+#ifdef DIVERG_STATS
     timer.reset();
 #endif
 
     range_spadd_numeric( handle, a_rowmap, a_entries, b_rowmap, b_entries,
                          c_rowmap, c_entries );
 
-#ifdef PSI_STATS
+#ifdef DIVERG_STATS
     d = timer.seconds();
-    std::cout << "psi::range_spadd_numeric time: " << d * 1000 << "ms"
+    std::cout << "diverg::range_spadd_numeric time: " << d * 1000 << "ms"
               << std::endl;
 #endif
   }
@@ -914,7 +915,7 @@ namespace psi {
     auto maps_ptr = &maps;
 
     Kokkos::parallel_for(
-        "psi::crs_matrix::range_spgemm_symbolic::count_row_nnz",
+        "diverg::crs_matrix::range_spgemm_symbolic::count_row_nnz",
         policy_type( 0, a_nrows ), KOKKOS_LAMBDA ( const uint64_t row ) {
           auto a_idx = a_rowmap( row );
           auto a_end = a_rowmap( row + 1 );
@@ -926,7 +927,7 @@ namespace psi {
             for ( ; b_idx != b_end; b_idx += 2 ) {
               auto old = acc[ b_entries( b_idx ) ];
               acc[ b_entries( b_idx ) ]
-                  = PSI_MACRO_MAX( old, b_entries( b_idx + 1 ) );
+                  = DIVERG_MACRO_MAX( old, b_entries( b_idx + 1 ) );
             }
           }
 
@@ -938,8 +939,8 @@ namespace psi {
             ++it;
             for ( ; it != acc.end(); ++it ) {
               if ( it->first <= hi + 1 ) {  // merge
-                lo = PSI_MACRO_MIN( lo, it->first );
-                hi = PSI_MACRO_MAX( hi, it->second );
+                lo = DIVERG_MACRO_MIN( lo, it->first );
+                hi = DIVERG_MACRO_MAX( hi, it->second );
                 continue;
               }
               lo = it->first;
@@ -957,7 +958,7 @@ namespace psi {
         } );
 
     Kokkos::parallel_scan(
-        "psi::crs_matrix::range_spgemm_symbolic::computing_row_map_c",
+        "diverg::crs_matrix::range_spgemm_symbolic::computing_row_map_c",
         policy_type( 0, a_nrows ),
         KOKKOS_LAMBDA ( const int i, size_type& update, const bool final ) {
           // Load old value in case we update it before accumulating
@@ -1019,7 +1020,7 @@ namespace psi {
     auto maps_ptr = &maps;
 
     Kokkos::parallel_for(
-        "psi::crs_matrix::range_spgemm_numeric::compute_numeric",
+        "diverg::crs_matrix::range_spgemm_numeric::compute_numeric",
         policy_type( 0, a_nrows ), KOKKOS_LAMBDA ( const uint64_t row ) {
           auto a_idx = a_rowmap( row );
           auto a_end = a_rowmap( row + 1 );
@@ -1031,7 +1032,7 @@ namespace psi {
             for ( ; b_idx != b_end; b_idx += 2 ) {
               auto old = acc[ b_entries( b_idx ) ];
               acc[ b_entries( b_idx ) ]
-                  = PSI_MACRO_MAX( old, b_entries( b_idx + 1 ) );
+                  = DIVERG_MACRO_MAX( old, b_entries( b_idx + 1 ) );
             }
           }
 
@@ -1043,8 +1044,8 @@ namespace psi {
             ++it;
             for ( ; it != acc.end(); ++it ) {
               if ( it->first <= hi + 1 ) {  // merge
-                lo = PSI_MACRO_MIN( lo, it->first );
-                hi = PSI_MACRO_MAX( hi, it->second );
+                lo = DIVERG_MACRO_MIN( lo, it->first );
+                hi = DIVERG_MACRO_MAX( hi, it->second );
                 continue;
               }
               c_entries( c_idx++ ) = lo;
@@ -1092,7 +1093,7 @@ namespace psi {
     typedef typename c_row_map_type::execution_space execution_space;
     typedef Kokkos::TeamPolicy< execution_space > policy_type;
     typedef typename policy_type::member_type member_type;
-    typedef psi::HBitVector< TL1Size, execution_space > hbv_type;
+    typedef diverg::HBitVector< TL1Size, execution_space > hbv_type;
 
     // TODO: Extend static asserts to all views
     static_assert(
@@ -1113,7 +1114,7 @@ namespace psi {
     hbv_type::set_scratch_size( policy, b_ncols );
 
     Kokkos::parallel_for(
-        "psi::crs_matrix::range_spgemm_symbolic::count_row_nnz", policy,
+        "diverg::crs_matrix::range_spgemm_symbolic::count_row_nnz", policy,
         KOKKOS_LAMBDA( const member_type& tm ) {
           auto row = tm.league_rank();
           auto a_idx = a_rowmap( row );
@@ -1188,7 +1189,7 @@ namespace psi {
         } );
 
     Kokkos::parallel_scan(
-        "psi::crs_matrix::range_spgemm_symbolic::computing_row_map_c", a_nrows,
+        "diverg::crs_matrix::range_spgemm_symbolic::computing_row_map_c", a_nrows,
         KOKKOS_LAMBDA( const int i, size_type& update, const bool final ) {
           // Load old value in case we update it before accumulating
           const size_type val_ip1 = c_rowmap( i + 1 );
@@ -1232,7 +1233,7 @@ namespace psi {
     typedef typename c_entries_type::execution_space execution_space;
     typedef Kokkos::TeamPolicy< execution_space > policy_type;
     typedef typename policy_type::member_type member_type;
-    typedef psi::HBitVector< TL1Size, execution_space > hbv_type;
+    typedef diverg::HBitVector< TL1Size, execution_space > hbv_type;
 
     // TODO: Extend static asserts to all views
     static_assert(
@@ -1253,7 +1254,7 @@ namespace psi {
     hbv_type::set_scratch_size( policy, b_ncols );
 
     Kokkos::parallel_for(
-        "psi::crs_matrix::range_spgemm_numeric::accumulate_hbv", policy,
+        "diverg::crs_matrix::range_spgemm_numeric::accumulate_hbv", policy,
         KOKKOS_LAMBDA( const member_type& tm ) {
           auto row = tm.league_rank();
           auto a_idx = a_rowmap( row );
@@ -1374,8 +1375,8 @@ namespace psi {
     //typedef typename TSparseConfig::grid_type grid_type;
 
     assert( handle.a_ncols == static_cast< ordinal_type >( b_rowmap.extent( 0 ) - 1 ) );
-    ASSERT( handle.a_ncols <= std::numeric_limits< ordinal_type >::max() - 1 );
-    ASSERT( handle.b_ncols <= std::numeric_limits< ordinal_type >::max() - 1 );
+    DIVERG_ASSERT( handle.a_ncols <= std::numeric_limits< ordinal_type >::max() - 1 );
+    DIVERG_ASSERT( handle.b_ncols <= std::numeric_limits< ordinal_type >::max() - 1 );
 
     _range_spgemm_symbolic( handle, a_rowmap, a_entries, b_rowmap, b_entries,
                             c_rowmap, config.grid, config.part, config.accm );
@@ -1399,8 +1400,8 @@ namespace psi {
     //typedef typename TSparseConfig::grid_type grid_type;
 
     assert( handle.a_ncols == static_cast< ordinal_type >( b_rowmap.extent( 0 ) - 1 ) );
-    ASSERT( handle.a_ncols <= std::numeric_limits< ordinal_type >::max() - 1 );
-    ASSERT( handle.b_ncols <= std::numeric_limits< ordinal_type >::max() - 1 );
+    DIVERG_ASSERT( handle.a_ncols <= std::numeric_limits< ordinal_type >::max() - 1 );
+    DIVERG_ASSERT( handle.b_ncols <= std::numeric_limits< ordinal_type >::max() - 1 );
 
     _range_spgemm_numeric( handle, a_rowmap, a_entries, b_rowmap, b_entries,
                            c_rowmap, c_entries, config.grid, config.part,
@@ -1430,24 +1431,24 @@ namespace psi {
     typedef typename c_row_map_type::value_type size_type;
 
     assert( handle.a_ncols == static_cast< ordinal_type >( b_rowmap.extent( 0 ) - 1 ) );
-    ASSERT( handle.a_ncols <= std::numeric_limits< ordinal_type >::max() - 1 );
-    ASSERT( handle.b_ncols <= std::numeric_limits< ordinal_type >::max() - 1 );
+    DIVERG_ASSERT( handle.a_ncols <= std::numeric_limits< ordinal_type >::max() - 1 );
+    DIVERG_ASSERT( handle.b_ncols <= std::numeric_limits< ordinal_type >::max() - 1 );
 
     ordinal_type n = a_rowmap.extent( 0 ) - 1;
     c_rowmap = c_row_map_type(
         Kokkos::ViewAllocateWithoutInitializing( "c_rowmap" ),
         a_rowmap.extent( 0 ) );
 
-#ifdef PSI_STATS
+#ifdef DIVERG_STATS
     Kokkos::Timer timer;
 #endif
 
     range_spgemm_symbolic( handle, a_rowmap, a_entries, b_rowmap, b_entries,
                            c_rowmap, config );
 
-#ifdef PSI_STATS
+#ifdef DIVERG_STATS
     double d = timer.seconds();
-    std::cout << "psi::range_spgemm_symbolic time: " << d * 1000 << "ms"
+    std::cout << "diverg::range_spgemm_symbolic time: " << d * 1000 << "ms"
               << std::endl;
 #endif
 
@@ -1456,16 +1457,16 @@ namespace psi {
     c_entries = c_entries_type( Kokkos::ViewAllocateWithoutInitializing( "C" ),
                                 c_rnnz );
 
-#ifdef PSI_STATS
+#ifdef DIVERG_STATS
     timer.reset();
 #endif
 
     range_spgemm_numeric( handle, a_rowmap, a_entries, b_rowmap, b_entries,
                           c_rowmap, c_entries, config );
 
-#ifdef PSI_STATS
+#ifdef DIVERG_STATS
     d = timer.seconds();
-    std::cout << "psi::range_spgemm_numeric time: " << d * 1000 << "ms"
+    std::cout << "diverg::range_spgemm_numeric time: " << d * 1000 << "ms"
               << std::endl;
 #endif
   }
@@ -1482,8 +1483,8 @@ namespace psi {
     //typedef typename config_type::execution_space execution_space;
 
     assert( a.numCols() == b.numRows() );
-    ASSERT( a.numCols() <= std::numeric_limits< ordinal_type >::max() - 1 );
-    ASSERT( b.numCols() <= std::numeric_limits< ordinal_type >::max() - 1 );
+    DIVERG_ASSERT( a.numCols() <= std::numeric_limits< ordinal_type >::max() - 1 );
+    DIVERG_ASSERT( b.numCols() <= std::numeric_limits< ordinal_type >::max() - 1 );
 
     auto a_entries = a.entries_device_view( config.space );
     auto a_rowmap = a.rowmap_device_view( config.space );
@@ -1514,7 +1515,7 @@ namespace psi {
     //typedef TSparseConfig config_type;
     //typedef typename config_type::execution_space execution_space;
 
-#ifdef PSI_STATS
+#ifdef DIVERG_STATS
   Kokkos::Timer timer;
 #endif
 
@@ -1550,7 +1551,7 @@ namespace psi {
       else break;
     }
 
-#ifdef PSI_STATS
+#ifdef DIVERG_STATS
     auto duration = timer.seconds();
     std::cout << "range_power time: " << duration * 1000 << "ms"
               << std::endl;
@@ -1558,6 +1559,6 @@ namespace psi {
 
     return TRCRSMatrix( a.numCols(), c_entries, c_rowmap );
   }
-}  // namespace psi
+}  // namespace diverg
 
-#endif  // PSI_RANGE_SPARSE_HPP_
+#endif  // DIVERG_RANGE_SPARSE_HPP_

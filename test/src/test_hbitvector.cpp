@@ -17,17 +17,16 @@
 
 //#include<cxxabi.h>
 
-#include <psi/hbitvector.hpp>
-#include <psi/graph.hpp>
-#include <psi/crs_matrix.hpp>
-#include <psi/utils.hpp>
+#include <diverg/hbitvector.hpp>
+#include <diverg/crs_matrix.hpp>
+#include <diverg/random.hpp>
 #include <gum/gfa_utils.hpp>
 #include <KokkosSparse_CrsMatrix.hpp>
 
 #include "test_base.hpp"
 
 
-using namespace psi;
+using namespace diverg;
 
 TEMPLATE_SCENARIO_SIG(
     "L1 begin position in bitvectors", "[hbitvector]",
@@ -125,7 +124,7 @@ TEMPLATE_SCENARIO_SIG(
 
       Kokkos::View< unsigned char* > flags( "flags", len );
       Kokkos::parallel_for(
-          "psi::test_hbitvector::l1_begin", policy,
+          "diverg::test_hbitvector::l1_begin", policy,
           KOKKOS_LAMBDA ( const member_type& tm ) {
             auto row = tm.league_rank();
             hbv_type hbv( tm, len, row );
@@ -153,7 +152,7 @@ TEMPLATE_SCENARIO_SIG(
       {
         std::size_t all_set = 0;
         Kokkos::parallel_reduce(
-            "psi::test_hbit_vector::l1_begin_assess", len,
+            "diverg::test_hbit_vector::l1_begin_assess", len,
             KOKKOS_LAMBDA ( const uint64_t i, std::size_t& all_set_local ) {
               if ( flags( i ) == 1 ) all_set_local += 1;
             },
@@ -249,7 +248,7 @@ TEMPLATE_SCENARIO_SIG(
 
       // Zero initialise `flags`
       Kokkos::parallel_for(
-          "psi::test_hbitvector::initialise_flags", nnz / 2,
+          "diverg::test_hbitvector::initialise_flags", nnz / 2,
           KOKKOS_LAMBDA ( const uint64_t i ) {
             flags( i ) = 0;
             if ( i == 0 ) crs_nnz() = 0;
@@ -258,7 +257,7 @@ TEMPLATE_SCENARIO_SIG(
       auto policy = policy_type( nrows, Kokkos::AUTO );
       hbv_type::set_scratch_size( policy, len );
       Kokkos::parallel_for(
-          "psi::test_hbitvector::set_range", policy,
+          "diverg::test_hbitvector::set_range", policy,
           KOKKOS_LAMBDA ( const member_type& tm ) {
             auto row = tm.league_rank();
             hbv_type hbv( tm, len, ( row + 1 ) * 1000 );
@@ -306,7 +305,7 @@ TEMPLATE_SCENARIO_SIG(
       {
         std::size_t all_set = 0;
         Kokkos::parallel_reduce(
-            "psi::test_hbit_vector::set_range_assess",
+            "diverg::test_hbit_vector::set_range_assess",
             flags.extent( 0 ),
             KOKKOS_LAMBDA ( const uint64_t i, std::size_t& all_set_local ) {
               if ( flags( i ) == 1 )
@@ -407,7 +406,7 @@ TEMPLATE_SCENARIO_SIG(
 
       // Zero initialise `msb_flags` and `lsb_flags`
       Kokkos::parallel_for(
-          "psi::test_hbitvector::initialise_flags",
+          "diverg::test_hbitvector::initialise_flags",
           hbv_type::num_bitsets( len ), KOKKOS_LAMBDA ( const uint64_t i ) {
             msb_flags( i ) = 0;
             lsb_flags( i ) = 0;
@@ -417,7 +416,7 @@ TEMPLATE_SCENARIO_SIG(
       auto policy = policy_type( nrows, Kokkos::AUTO );
       hbv_type::set_scratch_size( policy, len );
       Kokkos::parallel_for(
-          "psi::test_hbitvector::set_range", policy,
+          "diverg::test_hbitvector::set_range", policy,
           KOKKOS_LAMBDA ( const member_type& tm ) {
             auto row = tm.league_rank();
             hbv_type hbv( tm, len, ( row + 1 ) * 1000 );
@@ -468,7 +467,7 @@ TEMPLATE_SCENARIO_SIG(
       {
         size_type true_crs_nnz = 0;
         Kokkos::parallel_reduce(
-            "psi::test_hbit_vector::compute_crs_nnz",
+            "diverg::test_hbit_vector::compute_crs_nnz",
             policy_type( nrows, Kokkos::AUTO ),
             KOKKOS_LAMBDA ( const member_type& tm, size_type& tcnnz ) {
               auto row = tm.league_rank();
@@ -500,7 +499,7 @@ TEMPLATE_SCENARIO_SIG(
       {
         std::size_t all_set = 0;
         Kokkos::parallel_reduce(
-            "psi::test_hbit_vector::set_range_assess",
+            "diverg::test_hbit_vector::set_range_assess",
             msb_flags.extent( 0 ),
             KOKKOS_LAMBDA ( const uint64_t i, std::size_t& all_set_local ) {
               if ( msb_flags( i ) == 1 )
@@ -517,7 +516,7 @@ TEMPLATE_SCENARIO_SIG(
       {
         std::size_t all_set = 0;
         Kokkos::parallel_reduce(
-            "psi::test_hbit_vector::set_range_assess",
+            "diverg::test_hbit_vector::set_range_assess",
             lsb_flags.extent( 0 ),
             KOKKOS_LAMBDA ( const uint64_t i, std::size_t& all_set_local ) {
               if ( lsb_flags( i ) == 1 )
@@ -664,7 +663,7 @@ TEMPLATE_SCENARIO_SIG(
 
       // Computing `c_rowmap`
       Kokkos::parallel_for(
-          "psi::test_hbitvector::count_row_nnz", policy,
+          "diverg::test_hbitvector::count_row_nnz", policy,
           KOKKOS_LAMBDA ( const member_type& tm ) {
             auto row = tm.league_rank();
             hbv_type hbv( tm, len, ( row + 1 ) * 1000 );
@@ -702,7 +701,7 @@ TEMPLATE_SCENARIO_SIG(
           } );
 
       Kokkos::parallel_scan(
-          "psi::test_hbitvector::compute_rowmap", nrows,
+          "diverg::test_hbitvector::compute_rowmap", nrows,
           KOKKOS_LAMBDA ( const uint64_t i, size_type& update, const bool final ) {
             const size_type val_ip1 = c_rowmap( i + 1 );
             update += val_ip1;
@@ -729,7 +728,7 @@ TEMPLATE_SCENARIO_SIG(
 
         // Calculating `c_e`
         Kokkos::parallel_for(
-            "psi::test_hbitvector::accumulate_entries", policy,
+            "diverg::test_hbitvector::accumulate_entries", policy,
             KOKKOS_LAMBDA ( const member_type& tm ) {
               auto row = tm.league_rank();
               hbv_type hbv( tm, len, ( row + 1 ) * 1000 );
@@ -833,7 +832,7 @@ TEMPLATE_SCENARIO_SIG(
       Kokkos::deep_copy( flag, h_flag );
 
       Kokkos::parallel_for(
-          "psi::test_hbitvector::clear_l1", policy,
+          "diverg::test_hbitvector::clear_l1", policy,
           KOKKOS_LAMBDA ( const member_type& tm ) {
             auto row = tm.league_rank();
             auto hbv = hbv_type( tm, len, row * 1000 );
@@ -874,7 +873,7 @@ TEMPLATE_SCENARIO_SIG(
       Kokkos::deep_copy( flag, h_flag );
 
       Kokkos::parallel_for(
-          "psi::test_hbitvector::clear_l2_all", policy,
+          "diverg::test_hbitvector::clear_l2_all", policy,
           KOKKOS_LAMBDA ( const member_type& tm ) {
             auto row = tm.league_rank();
             auto hbv = hbv_type( tm, len, row * 1000 );
@@ -916,7 +915,7 @@ TEMPLATE_SCENARIO_SIG(
 
       size_type clen = 70;  // number of bitsets to clear in L2
       Kokkos::parallel_for(
-          "psi::test_hbitvector::clear_l2_lbidx", policy,
+          "diverg::test_hbitvector::clear_l2_lbidx", policy,
           KOKKOS_LAMBDA ( const member_type& tm ) {
             auto row = tm.league_rank();
             auto hbv = hbv_type( tm, len, row * 1000 );
@@ -971,7 +970,7 @@ TEMPLATE_SCENARIO_SIG(
 
       size_type clen = 25;
       Kokkos::parallel_for(
-          "psi::test_hbitvector::clear_l2_bidx", policy,
+          "diverg::test_hbitvector::clear_l2_bidx", policy,
           KOKKOS_LAMBDA ( const member_type& tm ) {
             auto row = tm.league_rank();
             auto hbv = hbv_type( tm, len, row * 1000 );
@@ -1024,10 +1023,10 @@ TEMPLATE_SCENARIO_SIG(
       Kokkos::deep_copy( flag, h_flag );
 
       size_type clen = 25;
-      size_type s_offset = psi::random::random_index( width );
-      size_type e_offset = psi::random::random_integer( 1, width - 1 );
+      size_type s_offset = diverg::random::random_index( width );
+      size_type e_offset = diverg::random::random_integer( 1, width - 1 );
       Kokkos::parallel_for(
-          "psi::test_hbitvector::clear_l2_idx", policy,
+          "diverg::test_hbitvector::clear_l2_idx", policy,
           KOKKOS_LAMBDA ( const member_type& tm ) {
             auto row = tm.league_rank();
             auto hbv = hbv_type( tm, len, row * 1000 );
@@ -1081,9 +1080,9 @@ TEMPLATE_SCENARIO_SIG(
       Kokkos::deep_copy( flag, h_flag );
 
       size_type clen = 25;
-      size_type s_offset = psi::random::random_index( width );
+      size_type s_offset = diverg::random::random_index( width );
       Kokkos::parallel_for(
-          "psi::test_hbitvector::clear_l2_idx", policy,
+          "diverg::test_hbitvector::clear_l2_idx", policy,
           KOKKOS_LAMBDA ( const member_type& tm ) {
             auto row = tm.league_rank();
             auto hbv = hbv_type( tm, len, row * 1000 );
