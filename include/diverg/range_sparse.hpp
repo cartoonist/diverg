@@ -266,7 +266,7 @@ namespace diverg {
         Kokkos::RangePolicy< Kokkos::DefaultHostExecutionSpace >( 0, nnz ),
         KOKKOS_LAMBDA ( const uint64_t i ) {
           value_type v = 0;
-          while ( v == 0 ) v = diverg::random::random_integer( lower, upper + 1 );
+          while ( v == 0 ) v = diverg::random::random_integer( lower, upper );
           h_a_values( i ) = v;
         } );
 

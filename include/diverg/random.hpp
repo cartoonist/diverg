@@ -21,6 +21,7 @@
 
 #include <random>
 #include <cassert>
+#include <limits>
 
 
 namespace diverg {
