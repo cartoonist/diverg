@@ -1,0 +1,35 @@
+/**
+ *    @file  basic_types.hpp
+ *   @brief  Basic type definitions.
+ *
+ *  This header file defines some basic types.
+ *
+ *  @author  Ali Ghaffaari (\@cartoonist), <ali.ghaffaari@uni-bielefeld.de>
+ *
+ *  @internal
+ *       Created:  Wed Mar 06, 2024  18:56
+ *  Organization:  Universität Bielefeld
+ *     Copyright:  Copyright (c) 2024, Ali Ghaffaari
+ *
+ *  This source code is released under the terms of the MIT License.
+ *  See LICENSE file for more information.
+ */
+
+#ifndef DIVERG_BASIC_TYPES_HPP__
+#define DIVERG_BASIC_TYPES_HPP__
+
+#include <cstdint>
+
+#include "config.hpp"
+
+#include "impl/basic_types_spec.hpp"
+#include "impl/basic_types_impl.hpp"
+
+namespace diverg {
+#ifndef DIVERG_HEADERS_ONLY
+@RANGEITERATOR_ETI_AVAIL_BLOCK@
+#endif
+
+}
+
+#endif // DIVERG_BASIC_TYPES_HPP__

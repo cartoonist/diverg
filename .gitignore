@@ -3,6 +3,7 @@ build/
 
 # Generated files
 include/diverg/config.hpp
+include/diverg/basic_types.hpp
 
 # Log files
 *.log

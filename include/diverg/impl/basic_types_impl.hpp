@@ -1,5 +1,5 @@
 /**
- *    @file  basic_types.hpp
+ *    @file  basic_types_impl.hpp
  *   @brief  Basic type definitions.
  *
  *  This header file defines some basic types.
@@ -15,8 +15,8 @@
  *  See LICENSE file for more information.
  */
 
-#ifndef DIVERG_BASIC_TYPES_HPP__
-#define DIVERG_BASIC_TYPES_HPP__
+#ifndef DIVERG_BASIC_TYPES_IMPL_HPP__
+#define DIVERG_BASIC_TYPES_IMPL_HPP__
 
 namespace diverg {
   /* https://stackoverflow.com/a/67642371/357257 */
@@ -42,4 +42,4 @@ namespace diverg {
   };
 }  /* --- end of namespace diverg --- */
 
-#endif // DIVERG_BASIC_TYPES_HPP__
+#endif // DIVERG_BASIC_TYPES_IMPL_HPP__

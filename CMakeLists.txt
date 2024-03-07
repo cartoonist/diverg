@@ -1,11 +1,13 @@
 # Recommanded CMake version 3.21
 cmake_minimum_required(VERSION 3.16)
 
+# Adding CMake module path.
+list(APPEND CMAKE_MODULE_PATH ${CMAKE_SOURCE_DIR}/cmake/modules)
+
 # Options
 option(BUILD_TESTING "Build test programs" OFF)
 option(BUILD_BENCHMARKING "Build benchmark program" OFF)
-# TODO: handle BUILD_HEADERS_ONLY option
-option(BUILD_HEADERS_ONLY "Configure as header-only library" OFF)
+option(DIVERG_HEADERS_ONLY "Configure as header-only library" OFF)
 option(DIVERG_ENABLE_OPENMP "Enable OpenMP as host execution space" ON)
 option(DIVERG_ENABLE_CUDA "Enable CUDA as device execution space" OFF)
 option(DIVERG_STRICT_ON_WARNS "Pass '-Werror' flag to compiler" ON)
@@ -19,6 +21,14 @@ if(USE_BUNDLED_ALL)
   set(USE_BUNDLED_KOKKOS_KERNELS on)
   set(USE_BUNDLED_GUM on)
 endif(USE_BUNDLED_ALL)
+
+if(NOT DIVERG_HEADERS_ONLY)
+  set(DIVERG_ADD_DEFAULT_ETI on)
+else(NOT DIVERG_HEADERS_ONLY)
+  set(DIVERG_ADD_DEFAULT_ETI off)
+endif(NOT DIVERG_HEADERS_ONLY)
+
+set(DIVERG_ENABLED_COMPONENTS "ALL")
 
 project(diverg VERSION 0.9.0 LANGUAGES CXX)
 
@@ -81,6 +91,13 @@ target_sources(libdiverg_headers
 
 # Defining `diverg::libdiverg_headers` alias
 add_library(diverg::libdiverg_headers ALIAS libdiverg_headers)
+
+if(NOT DIVERG_HEADERS_ONLY)
+  include(diverg_utils)
+  include(diverg_eti_ordinals)
+  include(diverg_eti)
+  add_subdirectory(src)
+endif(NOT DIVERG_HEADERS_ONLY)
 
 # Install targets for libdiverg_headers
 install(FILES ${BUILD_HEADER_FILES} DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}/diverg)

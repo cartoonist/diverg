@@ -1,0 +1,22 @@
+/**
+ *    @file  RangeIterator_eti_spec_inst.cpp
+ *   @brief  RangeIterator explicit template instantiations.
+ *
+ *  This source file contains RangeIterator ETIs (automatically generated).
+ *
+ *  @author  Ali Ghaffaari (\@cartoonist), <ali.ghaffaari@uni-bielefeld.de>
+ *
+ *  @internal
+ *       Created:  Wed Mar 06, 2024  18:56
+ *  Organization:  Universität Bielefeld
+ *     Copyright:  Copyright (c) 2024, Ali Ghaffaari
+ *
+ *  This source code is released under the terms of the MIT License.
+ *  See LICENSE file for more information.
+ */
+
+#include "basic_types.hpp"
+
+namespace diverg {
+@RANGEITERATOR_ETI_INST_BLOCK@
+}  /* === namespace diverg === */
