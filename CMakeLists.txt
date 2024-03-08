@@ -71,9 +71,6 @@ target_compile_features(libdiverg_headers INTERFACE cxx_std_14)
 # Generating the configure header file
 configure_file(include/diverg/config.hpp.in ${PROJECT_SOURCE_DIR}/include/diverg/config.hpp @ONLY)
 
-# TODO: Generating pkgconfig file
-#configure_file(diverg.pc.in ${PROJECT_SOURCE_DIR}/diverg.pc @ONLY)
-
 # Setting header files
 file(GLOB HEADER_FILES RELATIVE "${PROJECT_SOURCE_DIR}/include" "${PROJECT_SOURCE_DIR}/include/diverg/*.hpp")
 list(TRANSFORM HEADER_FILES PREPEND "${PROJECT_SOURCE_DIR}/include/" OUTPUT_VARIABLE BUILD_HEADER_FILES)
@@ -87,8 +84,6 @@ add_library(diverg::libdiverg_headers ALIAS libdiverg_headers)
 
 # Install targets for libdiverg_headers
 install(FILES ${BUILD_HEADER_FILES} DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}/diverg)
-# TODO: Install pkgconfig file
-#install(FILES diverg.pc DESTINATION ${CMAKE_INSTALL_LIBDIR}/pkgconfig)
 # Exporting targets
 install(TARGETS libdiverg_headers EXPORT diverg-targets)
 install(EXPORT diverg-targets NAMESPACE diverg:: DESTINATION ${CMAKE_INSTALL_LIBDIR}/cmake/diverg)
