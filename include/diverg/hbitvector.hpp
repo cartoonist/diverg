@@ -27,6 +27,7 @@
 #include <sdsl/bits.hpp>
 #include <Kokkos_Core.hpp>
 
+#include "utils.hpp"
 #include "range_sparse_base.hpp"
 
 
@@ -381,6 +382,7 @@ namespace diverg {
         else {
           return __fns( x, 0, i );
         }
+        DIVERG_BUILTIN_UNREACHABLE();
       }
 #endif
 

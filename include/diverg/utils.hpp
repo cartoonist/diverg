@@ -52,6 +52,18 @@
 #define DIVERG_MACRO_MIN(x, y) ((x) < (y) ? (x) : (y))
 #define DIVERG_MACRO_MAX(x, y) ((x) < (y) ? (y) : (x))
 
+#ifdef __has_builtin
+    #define DIVERG_HAS_BUILTIN(x) __has_builtin(x)
+#else
+    #define DIVERG_HAS_BUILTIN(x) 0
+#endif
+
+#if DIVERG_HAS_BUILTIN(__builtin_unreachable)
+    #define DIVERG_BUILTIN_UNREACHABLE() __builtin_unreachable()
+#else
+    #define DIVERG_BUILTIN_UNREACHABLE() (void)0
+#endif
+
 
 namespace diverg {
   /**
