@@ -50,6 +50,7 @@ namespace diverg {
     typedef typename xcrsmatrix_t::index_type::non_const_type::HostMirror const_host_entries_t;
     typedef typename xcrsmatrix_t::values_type::non_const_type::HostMirror const_host_values_t;
     typedef typename xcrsmatrix_t::row_map_type::non_const_type::HostMirror const_host_row_map_t;
+    typedef typename xcrsmatrix_t::ordinal_type ordinal_type;
 
     auto label = m.values.label();
     auto nrows = m.numRows();
@@ -79,7 +80,7 @@ namespace diverg {
 
       auto width = std::log( nrows ) + 1;
       std::cout << "   ... " << std::setw( width - 2 ) << label << " = [" << std::endl;
-      for ( std::size_t i = 0; i < nrows; ++i ) {
+      for ( ordinal_type i = 0; i < nrows; ++i ) {
         std::cout << "   ... " << std::setw( width ) << i << ": ";
         auto end = rowmap( i + 1 );
         for ( auto j = rowmap( i ); j < end; ++j ) {
@@ -276,7 +277,7 @@ namespace diverg {
       while ( i < nnz ) {
         auto idx = diverg::random::random_index( n );
         do {
-          if ( h_a_row_map( idx + 1 ) < n ) {
+          if ( h_a_row_map( idx + 1 ) < static_cast< size_type >( n ) ) {
             ++h_a_row_map( idx + 1 );
             ++i;
             break;
