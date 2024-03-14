@@ -24,10 +24,10 @@
 #include <limits>
 
 #include <gum/basic_types.hpp>
-#include <sdsl/bits.hpp>
 #include <Kokkos_Core.hpp>
 
 #include "utils.hpp"
+#include "bits.hpp"
 #include "range_sparse_base.hpp"
 
 
@@ -82,7 +82,7 @@ namespace diverg {
       using value_type = bool;
       /* === MEMBER CONSTANTS === */
       static constexpr const size_type BITSET_WIDTH            = gum::widthof< bitset_type >::value;  // 64 (if uint64_t)
-      static constexpr const unsigned short int BINDEX_SHIFT   = sdsl::bits::hi( BITSET_WIDTH );      // 6  (if uint64_t)
+      static constexpr const unsigned short int BINDEX_SHIFT   = diverg::bits::hi( BITSET_WIDTH );    // 6  (if uint64_t)
       static constexpr const size_type BOFFSET_MASK            = BITSET_WIDTH - 1u; // 0x0000001f (if size_type=uint32_t)
       static constexpr const size_type INDEX_ALIGN_MASK        = ~BOFFSET_MASK;     // 0xffffffe0 (if size_type=uint32_t)
       static constexpr const bitset_type BITSET_ALL_NIL        = 0;                   // 0x0000000000000000 (if uint64_t)
@@ -96,8 +96,8 @@ namespace diverg {
       /* === STATIC ASSERTS === */
       // Accepting 64-bit L1 size requires spending extra time checking for corner cases
       static_assert( ( TL1_Size >= ( BITSET_WIDTH << 1 ) ), "L1 size should be at least twice larger than bitset width" );
-      static_assert( ( sdsl::bits::cnt( TL1_Size ) == 1 ), "L1 size should be a power of 2" );
-      static_assert( ( sdsl::bits::cnt( BITSET_WIDTH ) == 1 ), "Bitset width should be a power of 2" );
+      static_assert( ( diverg::bits::cnt( TL1_Size ) == 1 ), "L1 size should be a power of 2" );
+      static_assert( ( diverg::bits::cnt( BITSET_WIDTH ) == 1 ), "Bitset width should be a power of 2" );
       static_assert( ( TL1_Size <= std::numeric_limits< size_type >::max() ), "L1 size cannot fit in size type" );
       /* === DATA MEMBERS === */
       //size_type m_size;         //!< Size of the bit vector
@@ -356,7 +356,7 @@ namespace diverg {
       sel( bitset_type x, size_type i )
       {
         KOKKOS_IF_ON_DEVICE( ( return HBitVector::sel_device( x, i ); ) )
-        KOKKOS_IF_ON_HOST( ( return sdsl::bits::sel( x, i ); ) )
+        KOKKOS_IF_ON_HOST( ( return diverg::bits::sel( x, i ); ) )
       }
 
 #if defined( KOKKOS_ENABLE_CUDA )
