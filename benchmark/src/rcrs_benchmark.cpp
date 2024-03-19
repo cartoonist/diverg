@@ -21,6 +21,8 @@
 #include <iomanip>
 #include <cmath>
 
+#include <gum/graph.hpp>
+#include <gum/io_utils.hpp>
 #include <Kokkos_Core.hpp>
 #include <Kokkos_Random.hpp>
 #include <KokkosSparse_CrsMatrix.hpp>
@@ -28,13 +30,10 @@
 #include <KokkosSparse_spadd.hpp>
 #include <Kokkos_StdAlgorithms.hpp>
 #include <Kokkos_NestedSort.hpp>
-
 #include <diverg/basic_types.hpp>
 #include <diverg/hbitvector.hpp>
 #include <diverg/dindex.hpp>
 #include <diverg/range_sparse.hpp>
-#include <gum/graph.hpp>
-#include <gum/io_utils.hpp>
 
 using namespace diverg;
 
@@ -257,30 +256,35 @@ kokkos_kernels_power( TXCRSMatrix const& a, unsigned int n )
   return c;
 }
 
-template< typename TOrdinal=int32_t, typename TScalar=char >
+template< typename TExecSpace=Kokkos::DefaultExecutionSpace,
+          typename TAccumulator=HBitVectorAccumulator< 8192 >,
+          typename TOrdinal=int32_t, typename TScalar=signed char >
 void
-benchmark_range_spgemm_graph( const std::string& graph_path, int d, bool verbose )
+benchmark_range_spgemm_graph( const std::string& graph_path, int d,
+                              bool verbose )
 {
+  typedef TExecSpace execution_space;
+  typedef TAccumulator accumulator_type;
   typedef TScalar scalar_t;
   typedef TOrdinal ordinal_t;
-  using accumulator_type = HBitVectorAccumulator< 8192 >;
-  using partition_type = typename AccumulatorDefaultPartition< accumulator_type >::type;
+  typedef typename AccumulatorDefaultPartition< accumulator_type >::type partition_type;
 #if defined(KOKKOS_ENABLE_CUDA)
   using grid_type = MatchingGridSpecType< execution_space, Kokkos::Cuda, grid::Fixed< 16, 32 > >;  // otherwise choose grid::Auto
 #else
   using grid_type = grid::Auto;
 #endif
-  using config_type = SparseConfig< grid_type, accumulator_type, partition_type >;
-  typedef config_type::execution_space execution_space;
-  typedef execution_space::device_type device_t;
+  using config_type = SparseConfig< grid_type, accumulator_type, partition_type, execution_space >;
+  typedef typename execution_space::device_type device_t;
   typedef KokkosSparse::CrsMatrix< scalar_t, ordinal_t, device_t > xcrsmatrix_t;
   typedef typename xcrsmatrix_t::HostMirror xcrs_host_mirror;
-  typedef typename xcrsmatrix_t::size_type size_type;
+  typedef std::common_type_t< typename xcrsmatrix_t::size_type, uint64_t > size_type;
   typedef diverg::CRSMatrix< diverg::crs_matrix::RangeDynamic, bool, ordinal_t, size_type > range_crsmatrix_t;
   typedef gum::SeqGraph< gum::Succinct > graph_type;
 
   graph_type graph;
 
+  std::cout << "Execution space concurrency: "
+            << execution_space::concurrency() << std::endl;
   std::cout << "Loading input graph..." << std::endl;
   gum::util::load( graph, graph_path, true );
 
@@ -299,8 +303,11 @@ benchmark_range_spgemm_graph( const std::string& graph_path, int d, bool verbose
   auto I = create_identity_matrix< xcrsmatrix_t >( a.numRows() );
   auto avi = kokkos_kernels_spadd( a, I );
 
+  std::cout << "Convert adjacency matrix to range CRS format..." << std::endl;
   range_crsmatrix_t ra( h_a );
+  std::cout << "Convert identity matrix in range CRS format..." << std::endl;
   auto rI = create_range_identity_matrix< range_crsmatrix_t >( h_a.numRows() );
+  std::cout << "Computing A + I..." << std::endl;
   auto ravi = range_spadd( ra, rI );
 
   auto c = kokkos_kernels_power( avi, d );
@@ -312,6 +319,7 @@ benchmark_range_spgemm_graph( const std::string& graph_path, int d, bool verbose
   //}
 
   config_type config;
+  std::cout << "Computing (A + I)^" << d << "..." << std::endl;
   auto rc = range_power( ravi, d, config );
   execution_space{}.fence();
 
@@ -326,11 +334,20 @@ benchmark_range_spgemm_graph( const std::string& graph_path, int d, bool verbose
   //}
 }
 
-template< typename TOrdinal=uint32_t, typename TScalar=char >
+template< typename TExecSpace=Kokkos::DefaultExecutionSpace,
+          typename TAccumulator=HBitVectorAccumulator< 8192 >,
+          typename TOrdinal=int32_t, typename TScalar=signed char >
 void
 benchmark_range_spgemm_random( TOrdinal n, std::size_t nnz, bool verbose )
 {
-  //auto a = create_random_binary_matrix< xcrsmatrix_t >( n, nnz, ra );
+  typedef TExecSpace execution_space;
+  typedef TScalar scalar_t;
+  typedef TOrdinal ordinal_t;
+  typedef typename execution_space::device_type device_t;
+  typedef KokkosSparse::CrsMatrix< scalar_t, ordinal_t, device_t > xcrsmatrix_t;
+
+  auto a = create_random_matrix_on_host< xcrsmatrix_t >( n, nnz );
+  diverg::print( a );
   //execution_space.fence();
   //range_crsmatrix_t rc;
   //range_spgemm( ra, ra );
@@ -422,7 +439,7 @@ check_options( Options< TOrdinal, TSize >& opts )
   std::cout << "nnz = " << opts.nnz << ", n = " << opts.n << std::endl;
 
   // Check sizes
-  if ( opts.n < 0 || opts.nnz < 0 ) {
+  if ( opts.n < 0 /* || opts.nnz < 0 */ ) {
     std::cerr << "nnz must be greater than zero" << std::endl;
     exit( EXIT_FAILURE );
   }
