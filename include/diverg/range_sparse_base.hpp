@@ -450,7 +450,7 @@ namespace diverg {
       return policy_type( 0, nrows );
     }
     /* === OPERATORS === */
-    KOKKOS_INLINE_FUNCTION void
+    inline void
     operator()( const uint64_t i ) const
     {
       auto begin = this->entries.data() + this->row_map( i );

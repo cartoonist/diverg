@@ -264,7 +264,7 @@ namespace diverg {
     Kokkos::parallel_for(
         "diverg::crs_matrix::::create_random_matrix_on_host::random_values",
         Kokkos::RangePolicy< Kokkos::DefaultHostExecutionSpace >( 0, nnz ),
-        KOKKOS_LAMBDA ( const uint64_t i ) {
+        [=]( const uint64_t i ) {
           value_type v = 0;
           while ( v == 0 ) v = diverg::random::random_integer( lower, upper );
           h_a_values( i ) = v;
@@ -289,7 +289,7 @@ namespace diverg {
       Kokkos::parallel_scan(
           "diverg::crs_matrix::::create_random_matrix_on_host::compute_row_map",
           Kokkos::RangePolicy< Kokkos::DefaultHostExecutionSpace >( 0, n ),
-          KOKKOS_LAMBDA ( const int i, size_type& update, const bool final ) {
+          [=]( const int i, size_type& update, const bool final ) {
             // Load old value in case we update it before accumulating
             const size_type val_ip1 = h_a_row_map( i + 1 );
             update += val_ip1;
@@ -302,7 +302,7 @@ namespace diverg {
     Kokkos::parallel_for(
         "diverg::crs_matrix::::create_random_matrix_on_host::random_entries",
         Kokkos::RangePolicy< Kokkos::DefaultHostExecutionSpace >( 0, n ),
-        KOKKOS_LAMBDA ( const uint64_t i ) {
+        [=]( const uint64_t i ) {
           auto l = h_a_row_map( i );
           auto u = h_a_row_map( i + 1 );
           auto begin = h_a_entries.data() + l;
@@ -916,7 +916,7 @@ namespace diverg {
 
     Kokkos::parallel_for(
         "diverg::crs_matrix::range_spgemm_symbolic::count_row_nnz",
-        policy_type( 0, a_nrows ), KOKKOS_LAMBDA ( const uint64_t row ) {
+        policy_type( 0, a_nrows ), [=]( const uint64_t row ) {
           auto a_idx = a_rowmap( row );
           auto a_end = a_rowmap( row + 1 );
           int id = token.acquire();
@@ -960,7 +960,7 @@ namespace diverg {
     Kokkos::parallel_scan(
         "diverg::crs_matrix::range_spgemm_symbolic::computing_row_map_c",
         policy_type( 0, a_nrows ),
-        KOKKOS_LAMBDA ( const int i, size_type& update, const bool final ) {
+        [=]( const int i, size_type& update, const bool final ) {
           // Load old value in case we update it before accumulating
           const size_type val_ip1 = c_rowmap( i + 1 );
           update += val_ip1;
@@ -1021,7 +1021,7 @@ namespace diverg {
 
     Kokkos::parallel_for(
         "diverg::crs_matrix::range_spgemm_numeric::compute_numeric",
-        policy_type( 0, a_nrows ), KOKKOS_LAMBDA ( const uint64_t row ) {
+        policy_type( 0, a_nrows ), [=]( const uint64_t row ) {
           auto a_idx = a_rowmap( row );
           auto a_end = a_rowmap( row + 1 );
           int id = token.acquire();
