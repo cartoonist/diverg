@@ -1676,9 +1676,23 @@ namespace diverg {
 
     template< typename TDeviceSpace=Kokkos::DefaultExecutionSpace >
     inline auto
+    entries_device_view( TDeviceSpace space={} )
+    {
+      return CRSMatrixBase::entries_device_view( this->entries, space );
+    }
+
+    template< typename TDeviceSpace=Kokkos::DefaultExecutionSpace >
+    inline auto
     entries_device_view( TDeviceSpace space={} ) const
     {
       return CRSMatrixBase::entries_device_view( this->entries, space );
+    }
+
+    template< typename TDeviceSpace=Kokkos::DefaultExecutionSpace >
+    inline auto
+    rowmap_device_view( TDeviceSpace space={} )
+    {
+      return CRSMatrixBase::rowmap_device_view( this->rowmap, space );
     }
 
     template< typename TDeviceSpace=Kokkos::DefaultExecutionSpace >
