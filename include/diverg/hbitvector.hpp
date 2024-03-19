@@ -205,6 +205,18 @@ namespace diverg {
         return ( idx + ( BITSET_WIDTH - 1 ) ) & ( INDEX_ALIGN_MASK );
       }
 
+      static inline size_type
+      space_aligned_size( size_type n ) noexcept
+      {
+        // 0x00000007 if `space_alignment==8` and `size_type=uint32_t`
+        size_type hi_mask = HBitVector::space_alignment - 1;
+        // 0xfffffff8 if `space_alignment==8` and `size_type=uint32_t`
+        size_type lo_mask = ~hi_mask;
+        // the result would be `n` if it is already a multiple of
+        // `space_alignment`; otherwise the next closest one.
+        return ( n + hi_mask ) & lo_mask;
+      }
+
       /**
        *   @brief Return aligned size for a vector of `n` bits
        *
@@ -320,9 +332,10 @@ namespace diverg {
       set_scratch_size( TPolicy& policy, size_type n )
       {
         auto l1size = HBitVector::l1_scratch_size();
-        auto l2size = HBitVector::l2_scratch_size( n );
+        auto l2size_aln = HBitVector::space_aligned_size(
+            HBitVector::l2_scratch_size( n ) );
         policy.set_scratch_size( 0, Kokkos::PerTeam( l1size ) );
-        if ( l2size != 0 ) policy.set_scratch_size( 1, Kokkos::PerTeam( l2size ) );
+        if ( l2size_aln != 0 ) policy.set_scratch_size( 1, Kokkos::PerTeam( l2size_aln ) );
         return policy;
       }
 
