@@ -264,46 +264,41 @@ copy_xcrs( TXCRSMatrix2 mat )
   return dst_matrix_type( "moved", mat.numRows(), values, crs_graph );
 }
 
-template< typename TXCRSMatrix, typename TRCRSMatrix >
+template< typename TXEntriesDeviceView, typename TXRowMapDeviceView,
+          typename TBEntriesDeviceView, typename TBRowMapDeviceView >
 inline bool
-is_same_host( TXCRSMatrix& x_mat, TRCRSMatrix& r_mat )
+_is_same( TXEntriesDeviceView x_entries,
+          TXRowMapDeviceView x_rowmap,
+          TBEntriesDeviceView b_entries,
+          TBRowMapDeviceView b_rowmap )
 {
-  typedef Kokkos::DefaultHostExecutionSpace host_space;
-  typedef typename TXCRSMatrix::size_type size_type;
-  typedef typename TXCRSMatrix::ordinal_type ordinal_type;
-  typedef make_basic_t< TRCRSMatrix > TBCRSMatrix;
-
-  TBCRSMatrix b_mat;
-  b_mat.assign( r_mat );
-
-  if ( x_mat.numRows() != b_mat.numRows() || x_mat.numCols() != b_mat.numCols()
-       || x_mat.nnz() != b_mat.nnz() )
-    return false;
+  typedef typename TXEntriesDeviceView::execution_space execution_space;
+  typedef typename TXRowMapDeviceView::non_const_value_type size_type;
 
   {
-    ordinal_type num_matches = 0;
+    size_type num_matches = 0;
     Kokkos::parallel_reduce(
         "diverg::test_range_sparse::compare_rowmap",
-        Kokkos::RangePolicy< host_space >( 0, x_mat.numRows() + 1 ),
-        KOKKOS_LAMBDA( const uint64_t i, ordinal_type& l_nm ) {
-          if ( x_mat.graph.row_map( i ) == b_mat.rowMap( i ) ) ++l_nm;
+        Kokkos::RangePolicy< execution_space >( 0, x_rowmap.extent( 0 ) ),
+        KOKKOS_LAMBDA ( const uint64_t i, size_type& l_nm ) {
+          if ( x_rowmap( i ) == b_rowmap( i ) ) ++l_nm;
         },
         num_matches );
 
-    if ( num_matches != x_mat.numRows() + 1 ) return false;
+    if ( num_matches != x_rowmap.extent( 0 ) ) return false;
   }
 
   {
     size_type num_matches = 0;
     Kokkos::parallel_reduce(
         "diverg::test_range_sparse::compare_entries",
-        Kokkos::RangePolicy< host_space >( 0, x_mat.nnz() ),
-        KOKKOS_LAMBDA( const uint64_t i, size_type& l_nm ) {
-          if ( x_mat.graph.entries( i ) == b_mat.entry( i ) ) ++l_nm;
+        Kokkos::RangePolicy< execution_space >( 0, x_entries.extent( 0 ) ),
+        KOKKOS_LAMBDA ( const uint64_t i, size_type& l_nm ) {
+          if ( x_entries( i ) == b_entries( i ) ) ++l_nm;
         },
         num_matches );
 
-    if ( num_matches != x_mat.nnz() ) return false;
+    if ( num_matches != x_entries.extent( 0 ) ) return false;
   }
 
   return true;
@@ -313,18 +308,20 @@ template< typename TXCRSMatrix, typename TRCRSMatrix >
 inline bool
 is_same( TXCRSMatrix& x_mat, TRCRSMatrix& r_mat )
 {
-  typedef Kokkos::DefaultHostExecutionSpace host_space;
-  typedef typename TXCRSMatrix::memory_space xcrs_memory_space;
-  typedef typename TXCRSMatrix::HostMirror xcrs_host_mirror;
+  typedef typename TXCRSMatrix::execution_space xcrs_execution_space;
+  typedef make_basic_t< TRCRSMatrix > TBCRSMatrix;
 
-  if constexpr ( Kokkos::SpaceAccessibility<
-                     host_space, xcrs_memory_space >::accessible ) {
-    return is_same_host( x_mat, r_mat );
-  }
-  else {
-    auto h_xmat = copy_xcrs< xcrs_host_mirror >( x_mat );
-    return is_same_host( h_xmat, r_mat );
-  }
+  TBCRSMatrix b_mat;
+  b_mat.assign( r_mat );
+
+  if ( x_mat.numRows() != b_mat.numRows() || x_mat.numCols() != b_mat.numCols()
+       || x_mat.nnz() != b_mat.nnz() )
+    return false;
+
+  auto b_mat_entries = b_mat.entries_device_view( xcrs_execution_space{} );
+  auto b_mat_row_map = b_mat.rowmap_device_view( xcrs_execution_space{} );
+
+  return _is_same( x_mat.graph.entries, x_mat.graph.row_map, b_mat_entries, b_mat_row_map );
 }
 
 template< typename TXCRSMatrix >
