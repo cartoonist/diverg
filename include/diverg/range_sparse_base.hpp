@@ -386,11 +386,12 @@ namespace diverg {
   template< typename TGridSpec,
             typename TAccumulator,
             typename TPartition =
-                typename AccumulatorDefaultPartition< TAccumulator >::type >
+                typename AccumulatorDefaultPartition< TAccumulator >::type,
+            typename TExecSpace = typename AccumulatorExecSpace< TAccumulator >::type >
   struct SparseConfig {
     using partition_type = TPartition;
     using accumulator_type = TAccumulator;
-    using execution_space = typename AccumulatorExecSpace< accumulator_type >::type;
+    using execution_space = TExecSpace;
     using grid_type = ExecGridType< execution_space, TGridSpec >;
     /* === MEMBERS === */
     partition_type   part;
