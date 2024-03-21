@@ -217,7 +217,7 @@ namespace test_util {
     Kokkos::parallel_for(
         "diverg::test_crsmatrix::to_external_crs::count_row_nnz",
         policy_type( nrows, Kokkos::AUTO ),
-        [=]( const member_type& tm ) {
+        KOKKOS_LAMBDA ( const member_type& tm ) {
           auto i = tm.league_rank();
           size_type row_nnz = 0;
           Kokkos::parallel_reduce(
