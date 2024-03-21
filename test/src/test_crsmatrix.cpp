@@ -35,11 +35,10 @@ namespace test_util {
     return matrix.numRows();
   }
 
-  template< typename TValue, std::size_t NRows, std::size_t NCols >
-  constexpr inline auto
-  numRows( std::array< std::array< TValue, NCols >, NRows > const& matrix )
+  inline auto
+  numRows( const Kokkos::View< bool**, Kokkos::DefaultHostExecutionSpace > matrix )
   {
-    return NRows;
+    return matrix.extent( 0 );
   }
 
   template< typename TCRSMatrix >
@@ -49,11 +48,10 @@ namespace test_util {
     return matrix.numCols();
   }
 
-  template< typename TValue, std::size_t NRows, std::size_t NCols >
-  constexpr inline auto
-  numCols( std::array< std::array< TValue, NCols >, NRows > const& matrix )
+  inline auto
+  numCols( const Kokkos::View< bool**, Kokkos::DefaultHostExecutionSpace > matrix )
   {
-    return NCols;
+    return matrix.extent( 1 );
   }
 
   /* NOTE: The `matrix` cannot be const reference because of Buffered specialisations. */
@@ -64,32 +62,28 @@ namespace test_util {
     return matrix( i, j );
   }
 
-  template< typename TValue, std::size_t NRows, std::size_t NCols >
   inline auto
-  access( std::array< std::array< TValue, NCols >, NRows >& matrix,
+  access( const Kokkos::View< bool**, Kokkos::DefaultHostExecutionSpace > matrix,
           std::size_t i, std::size_t j )
   {
-    return matrix[i][j];
+    return matrix( i, j );
   }
 
-  /* NOTE: The `matrix` cannot be const reference because of Buffered specialisations. */
-  template< typename TValue, std::size_t NRows, std::size_t NCols >
   inline std::size_t
-  get_nnz( std::array< std::array< TValue, NCols >, NRows >& matrix )
+  get_nnz( const Kokkos::View< bool**, Kokkos::DefaultHostExecutionSpace > matrix )
   {
     using host_space = Kokkos::DefaultHostExecutionSpace;
     using rank_type = Kokkos::Rank< 2 >;
 
     auto nrows = numRows( matrix );
     auto ncols = numCols( matrix );
-    auto mat_ptr = &matrix;
 
     std::size_t nnz = 0;
     Kokkos::parallel_reduce(
         "diverg::test_crsmatrix::compute_nnz",
         Kokkos::MDRangePolicy< host_space, rank_type >( { 0, 0 }, { nrows, ncols } ),
-        KOKKOS_LAMBDA ( const uint64_t i, const uint64_t j, std::size_t& l_nnz ) {
-          if ( access( *mat_ptr, i, j ) == 1 ) l_nnz += 1;
+        [=]( const uint64_t i, const uint64_t j, std::size_t& l_nnz ) {
+          if ( matrix( i, j ) == 1 ) l_nnz += 1;
         }, nnz );
 
     return nnz;
@@ -102,51 +96,29 @@ namespace test_util {
     return matrix.nnz();
   }
 
-  template< typename TMatrix >
+  template< typename TDenseView >
   inline void
-  zero_matrix( TMatrix& matrix )
-  {
-    using host_space = Kokkos::DefaultHostExecutionSpace;
-    using rank_type = Kokkos::Rank< 2 >;
-
-    auto nrows = numRows( matrix );
-    auto ncols = numCols( matrix );
-    auto mat_ptr = &matrix;
-
-    Kokkos::parallel_for(
-        "diverg::test_crsmatrix::zero_matrix",
-        Kokkos::MDRangePolicy< host_space, rank_type >( { 0, 0 }, { nrows, ncols } ),
-        KOKKOS_LAMBDA ( const uint64_t i, const uint64_t j ) {
-          ( *mat_ptr )[i][j] = 0;
-        } );
-  }
-
-  template< typename TMatrix >
-  inline void
-  random_matrix( TMatrix& matrix, std::size_t nnz )
+  random_matrix( TDenseView matrix, std::size_t nnz )
   {
     auto nrows = numRows( matrix );
     auto ncols = numCols( matrix );
 
     assert( nnz <= nrows * ncols );
 
-    // initialise the matrix by zero
-    zero_matrix( matrix );
-
     std::size_t i = 0;
     while ( i < nnz ) {
       auto r = random::random_index( nrows, rnd::get_rgn() );
       auto c = random::random_index( ncols, rnd::get_rgn() );
-      if ( matrix[r][c] == 0 ) {
-        matrix[r][c] = 1;
+      if ( matrix( r, c ) == 0 ) {
+        matrix( r, c ) = 1;
         ++i;
       }
     }
   }
 
-  template< typename TMatrix >
+  template< typename TDenseView >
   inline void
-  random_matrix_ranged( TMatrix& matrix, std::size_t nnz )
+  random_matrix_ranged( TDenseView matrix, std::size_t nnz )
   {
     static const std::size_t MIN_NOF_FRAGS = 1;
     static const std::size_t MAX_NOF_FRAGS = 4;
@@ -155,9 +127,6 @@ namespace test_util {
     auto ncols = numCols( matrix );
 
     assert( nnz <= nrows * ncols );
-
-    // initialise the matrix by zero
-    zero_matrix( matrix );
 
     std::size_t base_zp = nnz / nrows;     // minimum number of non-zero value per row
     std::size_t remainders = nnz % nrows;  // remainder of the division scattered across rows
@@ -204,7 +173,7 @@ namespace test_util {
       for ( auto it = lens.begin(); it != lens.end(); ++it ) {
         j += *cspace++;
         for ( std::size_t k = 0; k < *it; ++k ) {
-          matrix[i][j] = 1;
+          matrix( i, j ) = 1;
           ++j;
         }
       }
@@ -213,12 +182,11 @@ namespace test_util {
     }
   }
 
-  /* NOTE: The `matrix` cannot be const reference because of Buffered specialisations. */
-  template< typename TMatrix,
+  template< typename TDenseView,
             typename TExternalMatrix = KokkosSparse::CrsMatrix<
-                char, int, Kokkos::DefaultHostExecutionSpace > >
+                signed char, int, Kokkos::DefaultHostExecutionSpace > >
   inline TExternalMatrix
-  to_external_crs( TMatrix& matrix, std::size_t nnz=0 )
+  to_external_crs( const TDenseView matrix, std::size_t nnz=0 )
   {
     typedef Kokkos::DefaultHostExecutionSpace host_space;
     typedef Kokkos::TeamPolicy< host_space > policy_type;
@@ -242,23 +210,22 @@ namespace test_util {
     Kokkos::parallel_for(
         "diverg::test_crsmatrix::to_external_crs::set_values",
         Kokkos::RangePolicy< host_space >( 0, nnz ),
-        KOKKOS_LAMBDA ( const uint64_t i ) {
+        [=]( const uint64_t i ) {
           values( i ) = 1;  // boolean
         } );
-
-    auto mat_ptr = &matrix;
 
     Kokkos::parallel_for(
         "diverg::test_crsmatrix::to_external_crs::count_row_nnz",
         policy_type( nrows, Kokkos::AUTO ),
-        KOKKOS_LAMBDA ( const member_type& tm ) {
+        [=]( const member_type& tm ) {
           auto i = tm.league_rank();
           size_type row_nnz = 0;
           Kokkos::parallel_reduce(
               Kokkos::TeamThreadRange( tm, ncols ),
               [=]( const uint64_t j, size_type& l_row_nnz ) {
-                if ( ( *mat_ptr )[ i ][ j ] == 1 ) ++l_row_nnz;
-              }, row_nnz );
+                if ( matrix( i, j ) == 1 ) ++l_row_nnz;
+              },
+              row_nnz );
 
           Kokkos::single( Kokkos::PerTeam( tm ),
                           [=]() { rowmap( i + 1 ) = row_nnz; } );
@@ -268,7 +235,7 @@ namespace test_util {
     Kokkos::parallel_scan(
         "diverg::test_crsmatrix::to_external_crs::computing_rowmap",
         Kokkos::RangePolicy< host_space >( 0, nrows ),
-        KOKKOS_LAMBDA ( const uint64_t i, size_type& update, const bool final ) {
+        [=]( const uint64_t i, size_type& update, const bool final ) {
           // Load old value in case we update it before accumulating
           const size_type val_ip1 = rowmap( i + 1 );
           update += val_ip1;
@@ -279,10 +246,10 @@ namespace test_util {
     Kokkos::parallel_for(
         "diverg::test_crsmatrix::to_external_crs::fill_entries",
         Kokkos::RangePolicy< host_space >( 0, nrows ),
-        KOKKOS_LAMBDA ( const uint64_t i ) {
+        [=]( const uint64_t i ) {
           auto eidx = rowmap( i );
           for ( size_type j = 0; j < ncols; ++j ) {
-            if ( ( *mat_ptr )[ i ][ j ] == 1 ) entries( eidx++ ) = j;
+            if ( matrix( i, j ) == 1 ) entries( eidx++ ) = j;
           }
           assert( eidx == rowmap( i + 1 ) );
         } );
@@ -292,29 +259,31 @@ namespace test_util {
     return xcrsmat_type( "matrix", nrows, ncols, nnz, values, rowmap, entries );
   }
 
-  template< typename TMatrix1, typename TMatrix2 >
+  template< typename TDenseView >
   inline void
-  fill_block( TMatrix1& matrix, TMatrix2 const& block,
+  fill_block( TDenseView matrix, const TDenseView block,
               unsigned int& si, unsigned int& sj )
   {
     using host_space = Kokkos::DefaultHostExecutionSpace;
     using rank_type = Kokkos::Rank< 2 >;
 
-    auto mat_ptr = &matrix;
-    auto block_ptr = &block;
-
     Kokkos::parallel_for(
         "diverg::test_crsmatrix::fill_block",
         Kokkos::MDRangePolicy< host_space, rank_type >(
-            { 0, 0 }, { block.size(), block[ 0 ].size() } ),
-        KOKKOS_LAMBDA ( const uint64_t i, const uint64_t j ) {
-          ( *mat_ptr )[si + i][sj + j] = ( *block_ptr )[i][j];
+            { 0, 0 }, { numRows( block ), numCols( block ) } ),
+        [=]( const uint64_t i, const uint64_t j ) {
+          matrix( si + i, sj + j ) = block( i, j );
         } );
 
     si += numRows( block );
     sj += numCols( block );
   }
 
+  /* NOTE: The parameters cannot be const reference because of Buffered specialisations. */
+  /* NOTE: `TMatrix*` can be either:
+     - `diverg::CRSMatrix`,
+     - `KokkosKernel::CrsMatrix`, or
+     - `Kokkos::View` */
   template< typename TMatrix1, typename TMatrix2 >
   inline void
   is_identical( TMatrix1& matrix1, TMatrix2& matrix2 )
@@ -338,13 +307,15 @@ namespace test_util {
     Kokkos::parallel_reduce(
         "diverg::test_crsmatrix::elem-wise-compare",
         Kokkos::MDRangePolicy< host_space, rank_type >( { 0, 0 }, { M, N } ),
-        KOKKOS_LAMBDA ( const uint64_t i, const uint64_t j, std::size_t& l_nm ) {
+        [=]( const uint64_t i, const uint64_t j, std::size_t& l_nm ) {
           if ( access( *mat1_ptr, i, j ) == access( *mat2_ptr, i, j ) ) l_nm += 1;
         }, num_matches );
 
     REQUIRE( num_matches == M*N );
   }
 
+  /* NOTE: The parameters cannot be const reference because of Buffered specialisations. */
+  /* NOTE: `TCRSMatrix*` is a specialisation of `diverg::CRSMatrix` */
   template< typename TCRSMatrix1, typename TCRSMatrix2 >
   inline void
   is_identical_crs( TCRSMatrix1& matrix1, TCRSMatrix2& matrix2 )
@@ -368,7 +339,7 @@ namespace test_util {
     Kokkos::parallel_reduce(
         "diverg::test_crsmatrix::crs_compare_entries",
         Kokkos::RangePolicy< host_space >( 0, entries_size ),
-        KOKKOS_LAMBDA ( const uint64_t i, std::size_t& l_nm ) {
+        [=]( const uint64_t i, std::size_t& l_nm ) {
           if ( mat1_ptr->entry( i ) == mat2_ptr->entry( i ) ) l_nm += 1;
         }, num_matches );
     REQUIRE( num_matches == entries_size );
@@ -377,7 +348,7 @@ namespace test_util {
     Kokkos::parallel_reduce(
         "diverg::test_crsmatrix::crs_compare_rowmap",
         Kokkos::RangePolicy< host_space >( 0, nrows + 1 ),
-        KOKKOS_LAMBDA ( const uint64_t i, std::size_t& l_nm ) {
+        [=]( const uint64_t i, std::size_t& l_nm ) {
           if ( mat1_ptr->rowMap( i ) == mat2_ptr->rowMap( i ) ) l_nm += 1;
         }, num_matches );
     REQUIRE( num_matches == nrows + 1 );
@@ -413,46 +384,47 @@ TEMPLATE_SCENARIO( "Generic functionality of Boolean CRSMatrices", "[crsmatrix][
 {
   typedef TestType spec_type;
   typedef CRSMatrix< spec_type, bool > crsmat_type;
+  typedef Kokkos::DefaultHostExecutionSpace host_space;
 
   GIVEN( "A tiny matrix" )
   {
     constexpr const std::size_t nnz = 25;
     constexpr const std::size_t nrows = 10;
     constexpr const std::size_t ncols = 10;
-    std::array< std::array< bool, ncols >, nrows > simple;
+    Kokkos::View< bool**, host_space > simple( "simple", nrows, ncols );
 
-    test_util::zero_matrix( simple );
-    simple[ 0 ][ 3 ] = 1;
-    simple[ 0 ][ 4 ] = 1;
-    simple[ 0 ][ 5 ] = 1;
-    simple[ 0 ][ 6 ] = 1;
-    simple[ 1 ][ 7 ] = 1;
-    simple[ 1 ][ 8 ] = 1;
-    simple[ 1 ][ 9 ] = 1;
-    simple[ 2 ][ 0 ] = 1;
-    simple[ 2 ][ 1 ] = 1;
-    simple[ 2 ][ 6 ] = 1;
-    simple[ 4 ][ 1 ] = 1;
-    simple[ 4 ][ 2 ] = 1;
-    simple[ 5 ][ 0 ] = 1;
-    simple[ 5 ][ 1 ] = 1;
-    simple[ 5 ][ 2 ] = 1;
-    simple[ 5 ][ 3 ] = 1;
-    simple[ 5 ][ 4 ] = 1;
-    simple[ 5 ][ 5 ] = 1;
-    simple[ 5 ][ 6 ] = 1;
-    simple[ 5 ][ 7 ] = 1;
-    simple[ 5 ][ 8 ] = 1;
-    simple[ 5 ][ 9 ] = 1;
-    simple[ 8 ][ 9 ] = 1;
-    simple[ 9 ][ 8 ] = 1;
-    simple[ 9 ][ 9 ] = 1;
+    simple( 0, 3 ) = 1;
+    simple( 0, 4 ) = 1;
+    simple( 0, 5 ) = 1;
+    simple( 0, 6 ) = 1;
+    simple( 1, 7 ) = 1;
+    simple( 1, 8 ) = 1;
+    simple( 1, 9 ) = 1;
+    simple( 2, 0 ) = 1;
+    simple( 2, 1 ) = 1;
+    simple( 2, 6 ) = 1;
+    simple( 4, 1 ) = 1;
+    simple( 4, 2 ) = 1;
+    simple( 5, 0 ) = 1;
+    simple( 5, 1 ) = 1;
+    simple( 5, 2 ) = 1;
+    simple( 5, 3 ) = 1;
+    simple( 5, 4 ) = 1;
+    simple( 5, 5 ) = 1;
+    simple( 5, 6 ) = 1;
+    simple( 5, 7 ) = 1;
+    simple( 5, 8 ) = 1;
+    simple( 5, 9 ) = 1;
+    simple( 8, 9 ) = 1;
+    simple( 9, 8 ) = 1;
+    simple( 9, 9 ) = 1;
 
     REQUIRE( test_util::get_nnz( simple ) == nnz );
 
     WHEN( "A CRSMatrix instance is constructed by an external CRS matrix" )
     {
-      crsmat_type matrix( test_util::to_external_crs( simple, nnz ) );
+      auto x_simple = test_util::to_external_crs( simple, nnz );
+      crsmat_type matrix( x_simple );
 
       THEN( "It should be identical to the original matrix" )
       {
@@ -466,7 +438,7 @@ TEMPLATE_SCENARIO( "Generic functionality of Boolean CRSMatrices", "[crsmatrix][
     constexpr const std::size_t nnz = 2400;
     constexpr const std::size_t nrows = 200;
     constexpr const std::size_t ncols = 200;
-    std::array< std::array< bool, ncols >, nrows > simple;
+    Kokkos::View< bool**, host_space > simple( "simple", nrows, ncols );
 
     test_util::random_matrix( simple, nnz );
     INFO( "Seed for the random number generator: " << rnd::get_iseed() );
@@ -499,19 +471,18 @@ TEMPLATE_SCENARIO( "Generic functionality of Boolean CRSMatrices", "[crsmatrix][
     constexpr const std::size_t nnz1 = 2400;
     constexpr const std::size_t nrows1 = 200;
     constexpr const std::size_t ncols1 = 200;
-    std::array< std::array< bool, ncols1 >, nrows1 > block1;
+    Kokkos::View< bool**, host_space > block1( "block1", nrows1, ncols1 );
 
     constexpr const std::size_t nnz2 = 4000;
     constexpr const std::size_t nrows2 = 400;
     constexpr const std::size_t ncols2 = 400;
-    std::array< std::array< bool, ncols2 >, nrows2 > block2;
+    Kokkos::View< bool**, host_space > block2( "block2", nrows2, ncols2 );
 
-    std::array< std::array< bool, ncols1 + ncols2 >, nrows1 + nrows2 > appended;
+    Kokkos::View< bool**, host_space > appended( "appended", nrows1 + nrows2, ncols1 + ncols2 );
 
     test_util::random_matrix_ranged( block1, nnz1 );
     test_util::random_matrix_ranged( block2, nnz2 );
     INFO( "Seed for the random number generator: " << rnd::get_iseed() );
-    test_util::zero_matrix( appended );
     unsigned int i = 0;
     unsigned int j = 0;
     test_util::fill_block( appended, block1, i, j );
@@ -520,10 +491,12 @@ TEMPLATE_SCENARIO( "Generic functionality of Boolean CRSMatrices", "[crsmatrix][
     WHEN( "A CRSMatrix is constructed by two external CRS blocks" )
     {
       auto provider =
-          [&block1, &block2, &nrows1, &ncols1, &nnz1, &nnz2]
+          [&]
           ( auto callback ) {
-            callback( test_util::to_external_crs( block1, nnz1 ), 0, 0 );
-            callback( test_util::to_external_crs( block2, nnz2 ), nrows1, ncols1 );
+            auto x_block1 = test_util::to_external_crs( block1, nnz1 );
+            auto x_block2 = test_util::to_external_crs( block2, nnz2 );
+            callback( x_block1, 0, 0 );
+            callback( x_block2, nrows1, ncols1 );
           };
 
       crsmat_type matrix( nrows1 + nrows2, ncols1 + ncols2, provider );
@@ -551,7 +524,7 @@ TEMPLATE_SCENARIO( "Generic functionality of Boolean CRSMatrices", "[crsmatrix][
     constexpr const std::size_t nnz1 = 2400;
     constexpr const std::size_t nrows1 = 200;
     constexpr const std::size_t ncols1 = 200;
-    std::array< std::array< bool, ncols1 >, nrows1 > block1;
+    Kokkos::View< bool**, host_space > block1( "block1", nrows1, ncols1 );
 
     constexpr const std::size_t znrows = 3;
     constexpr const std::size_t zncols = 6;
@@ -559,14 +532,13 @@ TEMPLATE_SCENARIO( "Generic functionality of Boolean CRSMatrices", "[crsmatrix][
     constexpr const std::size_t nnz2 = 4000;
     constexpr const std::size_t nrows2 = 400;
     constexpr const std::size_t ncols2 = 400;
-    std::array< std::array< bool, ncols2 >, nrows2 > block2;
+    Kokkos::View< bool**, host_space > block2( "block2", nrows2, ncols2 );
 
-    std::array< std::array< bool, ncols1+zncols+ncols2 >, nrows1+znrows+nrows2 > appended;
+    Kokkos::View< bool**, host_space > appended( "appended", nrows1 + znrows + nrows2, ncols1 + zncols + ncols2 );
 
     test_util::random_matrix_ranged( block1, nnz1 );
     test_util::random_matrix_ranged( block2, nnz2 );
     INFO( "Seed for the random number generator: " << rnd::get_iseed() );
-    test_util::zero_matrix( appended );
     unsigned int i = 0;
     unsigned int j = 0;
     test_util::fill_block( appended, block1, i, j );
@@ -578,8 +550,10 @@ TEMPLATE_SCENARIO( "Generic functionality of Boolean CRSMatrices", "[crsmatrix][
     {
       auto provider =
           [&]( auto callback ) {
-            callback( test_util::to_external_crs( block1, nnz1 ), 0, 0 );
-            callback( test_util::to_external_crs( block2, nnz2 ), nrows1 + znrows, ncols1 + zncols );
+            auto x_block1 = test_util::to_external_crs( block1, nnz1 );
+            auto x_block2 = test_util::to_external_crs( block2, nnz2 );
+            callback( x_block1, 0, 0 );
+            callback( x_block2, nrows1 + znrows, ncols1 + zncols );
           };
 
       crsmat_type matrix( nrows1 + znrows + nrows2, ncols1 + zncols + ncols2, provider );
@@ -612,13 +586,14 @@ TEMPLATE_SCENARIO( "Specialised functionalities of non-Buffered Boolean CRSMatri
 {
   typedef TestType spec_type;
   typedef CRSMatrix< spec_type, bool > crsmat_type;
+  typedef Kokkos::DefaultHostExecutionSpace host_space;
 
   GIVEN( "A simple external matrix" )
   {
     constexpr const std::size_t nnz = 2400;
     constexpr const std::size_t nrows = 200;
     constexpr const std::size_t ncols = 200;
-    std::array< std::array< bool, ncols >, nrows > simple;
+    Kokkos::View< bool**, host_space > simple( "simple", nrows, ncols );
 
     test_util::random_matrix_ranged( simple, nnz );
     INFO( "Seed for the random number generator: " << rnd::get_iseed() );
@@ -627,7 +602,8 @@ TEMPLATE_SCENARIO( "Specialised functionalities of non-Buffered Boolean CRSMatri
 
     WHEN( "A CRSMatrix instance is constructed by an external CRS matrix" )
     {
-      crsmat_type matrix( test_util::to_external_crs( simple, nnz ) );
+      auto x_simple = test_util::to_external_crs( simple, nnz );
+      crsmat_type matrix( x_simple );
 
       THEN( "It should be identical to the original matrix" )
       {
@@ -664,19 +640,18 @@ TEMPLATE_SCENARIO( "Specialised functionalities of non-Buffered Boolean CRSMatri
     constexpr const std::size_t nnz1 = 2400;
     constexpr const std::size_t nrows1 = 200;
     constexpr const std::size_t ncols1 = 200;
-    std::array< std::array< bool, ncols1 >, nrows1 > block1;
+    Kokkos::View< bool**, host_space > block1( "block1", nrows1, ncols1 );
 
     constexpr const std::size_t nnz2 = 4000;
     constexpr const std::size_t nrows2 = 400;
     constexpr const std::size_t ncols2 = 400;
-    std::array< std::array< bool, ncols2 >, nrows2 > block2;
+    Kokkos::View< bool**, host_space > block2( "block2", nrows2, ncols2 );
 
-    std::array< std::array< bool, ncols1 + ncols2 >, nrows1 + nrows2 > appended;
+    Kokkos::View< bool**, host_space > appended( "appended", nrows1 + nrows2, ncols1 + ncols2 );
 
     test_util::random_matrix_ranged( block1, nnz1 );
     test_util::random_matrix_ranged( block2, nnz2 );
     INFO( "Seed for the random number generator: " << rnd::get_iseed() );
-    test_util::zero_matrix( appended );
     unsigned int i = 0;
     unsigned int j = 0;
     test_util::fill_block( appended, block1, i, j );
@@ -685,10 +660,12 @@ TEMPLATE_SCENARIO( "Specialised functionalities of non-Buffered Boolean CRSMatri
     WHEN( "A CRSMatrix is constructed by two external CRS blocks" )
     {
       auto provider =
-          [&block1, &block2, &nrows1, &ncols1, &nnz1, &nnz2]
+          [&]
           ( auto callback ) {
-            callback( test_util::to_external_crs( block1, nnz1 ), 0, 0 );
-            callback( test_util::to_external_crs( block2, nnz2 ), nrows1, ncols1 );
+            auto x_block1 = test_util::to_external_crs( block1, nnz1 );
+            auto x_block2 = test_util::to_external_crs( block2, nnz2 );
+            callback( x_block1, 0, 0 );
+            callback( x_block2, nrows1, ncols1 );
           };
 
       crsmat_type matrix( nrows1 + nrows2, ncols1 + ncols2, provider );
@@ -729,7 +706,7 @@ TEMPLATE_SCENARIO( "Specialised functionalities of non-Buffered Boolean CRSMatri
     constexpr const std::size_t nnz1 = 2400;
     constexpr const std::size_t nrows1 = 200;
     constexpr const std::size_t ncols1 = 200;
-    std::array< std::array< bool, ncols1 >, nrows1 > block1;
+    Kokkos::View< bool**, host_space > block1( "block1", nrows1, ncols1 );
 
     constexpr const std::size_t znrows = 3;
     constexpr const std::size_t zncols = 6;
@@ -737,14 +714,13 @@ TEMPLATE_SCENARIO( "Specialised functionalities of non-Buffered Boolean CRSMatri
     constexpr const std::size_t nnz2 = 4000;
     constexpr const std::size_t nrows2 = 400;
     constexpr const std::size_t ncols2 = 400;
-    std::array< std::array< bool, ncols2 >, nrows2 > block2;
+    Kokkos::View< bool**, host_space > block2( "block2", nrows2, ncols2 );
 
-    std::array< std::array< bool, ncols1+zncols+ncols2 >, nrows1+znrows+nrows2 > appended;
+    Kokkos::View< bool**, host_space > appended( "appended", nrows1 + znrows + nrows2, ncols1 + zncols + ncols2 );
 
     test_util::random_matrix_ranged( block1, nnz1 );
     test_util::random_matrix_ranged( block2, nnz2 );
     INFO( "Seed for the random number generator: " << rnd::get_iseed() );
-    test_util::zero_matrix( appended );
     unsigned int i = 0;
     unsigned int j = 0;
     test_util::fill_block( appended, block1, i, j );
@@ -756,8 +732,10 @@ TEMPLATE_SCENARIO( "Specialised functionalities of non-Buffered Boolean CRSMatri
     {
       auto provider =
           [&]( auto callback ) {
-            callback( test_util::to_external_crs( block1, nnz1 ), 0, 0 );
-            callback( test_util::to_external_crs( block2, nnz2 ), nrows1 + znrows, ncols1 + zncols );
+            auto x_block1 = test_util::to_external_crs( block1, nnz1 );
+            auto x_block2 = test_util::to_external_crs( block2, nnz2 );
+            callback( x_block1, 0, 0 );
+            callback( x_block2, nrows1 + znrows, ncols1 + zncols );
           };
 
       crsmat_type matrix( nrows1 + znrows + nrows2, ncols1 + zncols + ncols2, provider );
@@ -803,23 +781,25 @@ TEMPLATE_SCENARIO_SIG( "Specialised functionalities of Compressed Boolean CRS Ma
   typedef U crsmat_buffered_spec_type;
   typedef V crsmat_fully_buffered_spec_type;
   typedef CRSMatrix< crsmat_spec_type, bool > crsmat_type;
+  typedef Kokkos::DefaultHostExecutionSpace host_space;
 
   GIVEN( "A simple external matrix" )
   {
     constexpr const std::size_t nnz = 2000;
     constexpr const std::size_t nrows = 1000;
     constexpr const std::size_t ncols = 500;
-    std::array< std::array< bool, ncols >, nrows > simple;
+    Kokkos::View< bool**, host_space > simple( "simple", nrows, ncols );
 
     test_util::random_matrix( simple, nnz );
     INFO( "Seed for the random number generator: " << rnd::get_iseed() );
 
     REQUIRE( test_util::get_nnz( simple ) == nnz );
 
+    auto x_simple = test_util::to_external_crs( simple, nnz );
+
     WHEN( "The CRSMatrix is constructed by a Buffered CRS matrix")
     {
-      crsmat_type matrix( test_util::to_external_crs( simple, nnz ),
-                          crsmat_buffered_spec_type() );
+      crsmat_type matrix( x_simple, crsmat_buffered_spec_type() );
 
       THEN( "It should be identical to the original matrix" )
       {
@@ -830,7 +810,7 @@ TEMPLATE_SCENARIO_SIG( "Specialised functionalities of Compressed Boolean CRS Ma
     WHEN( "The CRSMatrix is assigned by a Buffered CRS matrix")
     {
       crsmat_type matrix;
-      make_buffered_t< crsmat_type > bmatrix( test_util::to_external_crs( simple, nnz ) );
+      make_buffered_t< crsmat_type > bmatrix( x_simple );
       matrix.assign( bmatrix );
 
       THEN( "It should be identical to the original matrix" )
@@ -841,8 +821,7 @@ TEMPLATE_SCENARIO_SIG( "Specialised functionalities of Compressed Boolean CRS Ma
 
     WHEN( "The CRSMatrix is constructed by a FullyBuffered CRS matrix")
     {
-      crsmat_type matrix( test_util::to_external_crs( simple, nnz ),
-                          crsmat_fully_buffered_spec_type() );
+      crsmat_type matrix( x_simple, crsmat_fully_buffered_spec_type() );
 
       THEN( "It should be identical to the original matrix" )
       {
@@ -853,7 +832,7 @@ TEMPLATE_SCENARIO_SIG( "Specialised functionalities of Compressed Boolean CRS Ma
     WHEN( "The CRSMatrix is assigned by a FullyBuffered CRS matrix")
     {
       crsmat_type matrix;
-      make_fully_buffered_t< crsmat_type > bmatrix( test_util::to_external_crs( simple, nnz ) );
+      make_fully_buffered_t< crsmat_type > bmatrix( x_simple );
       matrix.assign( bmatrix );
 
       THEN( "It should be identical to the original matrix" )
@@ -885,22 +864,25 @@ TEMPLATE_SCENARIO_SIG( "Specialised functionalities of Range Boolean CRS Matrix"
 {
   typedef CRSMatrix< T, bool > crsmat_range_type;
   typedef CRSMatrix< U, bool > crsmat_basic_type;
+  typedef Kokkos::DefaultHostExecutionSpace host_space;
 
   GIVEN( "A simple external matrix" )
   {
     constexpr const std::size_t nnz = 2400;
     constexpr const std::size_t nrows = 200;
     constexpr const std::size_t ncols = 200;
-    std::array< std::array< bool, ncols >, nrows > simple;
+    Kokkos::View< bool**, host_space > simple( "simple", nrows, ncols );
 
     test_util::random_matrix_ranged( simple, nnz );
     INFO( "Seed for the random number generator: " << rnd::get_iseed() );
 
     REQUIRE( test_util::get_nnz( simple ) == nnz );
 
+    auto x_simple = test_util::to_external_crs( simple, nnz );
+
     WHEN( "The Range CRSMatrix is assigned by a Basic CRSMatrix")
     {
-      crsmat_basic_type matrix( test_util::to_external_crs( simple, nnz ) );
+      crsmat_basic_type matrix( x_simple );
       crsmat_range_type r_matrix;
       r_matrix.assign( matrix );
 
@@ -912,7 +894,7 @@ TEMPLATE_SCENARIO_SIG( "Specialised functionalities of Range Boolean CRS Matrix"
 
     WHEN( "The Basic CRSMatrix is assigned by a Range CRSMatrix")
     {
-      crsmat_range_type r_matrix( test_util::to_external_crs( simple, nnz ) );
+      crsmat_range_type r_matrix( x_simple );
       crsmat_basic_type matrix;
       matrix.assign( r_matrix );
 
@@ -935,22 +917,23 @@ TEMPLATE_SCENARIO_SIG( "Merging two distance indices", "[crsmatrix][bool]",
 {
   typedef CRSMatrix< T, bool > crsmat_type;
   typedef CRSMatrix< U, bool > crsmat_mutable_type;
+  typedef Kokkos::DefaultHostExecutionSpace host_space;
+  typedef Kokkos::Rank< 2 > rank_type;
 
   GIVEN( "Two zero CRS matrices" )
   {
     constexpr const std::size_t nrows = 200;
     constexpr const std::size_t ncols = 200;
-    std::array< std::array< bool, ncols >, nrows > matrix1;
-    std::array< std::array< bool, ncols >, nrows > matrix2;
-    std::array< std::array< bool, ncols >, nrows > zero;
-    test_util::zero_matrix( matrix1 );
-    test_util::zero_matrix( matrix2 );
-    test_util::zero_matrix( zero );
+    Kokkos::View< bool**, host_space > matrix1( "matrix1", nrows, ncols );
+    Kokkos::View< bool**, host_space > matrix2( "matrix2", nrows, ncols );
+    Kokkos::View< bool**, host_space > zero( "zero", nrows, ncols );
 
     WHEN( "They got merged" )
     {
-      crsmat_type mat1( test_util::to_external_crs( matrix1 ) );
-      crsmat_type mat2( test_util::to_external_crs( matrix2 ) );
+      auto x_matrix1 = test_util::to_external_crs( matrix1 );
+      auto x_matrix2 = test_util::to_external_crs( matrix2 );
+      crsmat_type mat1( x_matrix1 );
+      crsmat_type mat2( x_matrix2 );
       crsmat_type mmat;
       mmat.assign( merge_distance_index< crsmat_mutable_type >( mat1, mat2 ) );
 
@@ -969,15 +952,16 @@ TEMPLATE_SCENARIO_SIG( "Merging two distance indices", "[crsmatrix][bool]",
     constexpr const std::size_t nnz = 4200;
     constexpr const std::size_t nrows = 200;
     constexpr const std::size_t ncols = 200;
-    std::array< std::array< bool, ncols >, nrows > matrix;
-    std::array< std::array< bool, ncols >, nrows > zero;
+    Kokkos::View< bool**, host_space > matrix( "matrix", nrows, ncols );
+    Kokkos::View< bool**, host_space > zero( "zero", nrows, ncols );
 
-    test_util::zero_matrix( zero );
     test_util::random_matrix_ranged( matrix, nnz );
     INFO( "Seed for the random number generator: " << rnd::get_iseed() );
 
-    crsmat_type matn( test_util::to_external_crs( matrix ) );
-    crsmat_type matz( test_util::to_external_crs( zero ) );
+    auto x_matrix = test_util::to_external_crs( matrix );
+    auto x_zero = test_util::to_external_crs( zero );
+    crsmat_type matn( x_matrix );
+    crsmat_type matz( x_zero );
     crsmat_type mmat;
 
     WHEN( "The random matrix is merged with the zero one" )
@@ -1011,25 +995,28 @@ TEMPLATE_SCENARIO_SIG( "Merging two distance indices", "[crsmatrix][bool]",
     constexpr const std::size_t nnz2 = 4000;
     constexpr const std::size_t nrows = 200;
     constexpr const std::size_t ncols = 200;
-    std::array< std::array< bool, ncols >, nrows > matrix1;
-    std::array< std::array< bool, ncols >, nrows > matrix2;
-    std::array< std::array< bool, ncols >, nrows > merged;
+    Kokkos::View< bool**, host_space > matrix1( "matrix1", nrows, ncols );
+    Kokkos::View< bool**, host_space > matrix2( "matrix2", nrows, ncols );
+    Kokkos::View< bool**, host_space > merged( "merged", nrows, ncols );
 
     test_util::random_matrix_ranged( matrix1, nnz1 );
     test_util::random_matrix_ranged( matrix2, nnz2 );
     INFO( "Seed for the random number generator: " << rnd::get_iseed() );
 
-    test_util::zero_matrix( merged );
-    for ( std::size_t i = 0; i < nrows; ++i ) {
-      for ( std::size_t j = 0; j < ncols; ++j ) {
-        if ( matrix1[i][j] == true || matrix2[i][j] == true ) merged[i][j] = true;
-      }
-    }
+    Kokkos::parallel_for(
+        "diverg::test_crsmatrix::merge",
+        Kokkos::MDRangePolicy< host_space, rank_type >( { 0, 0 }, { nrows, ncols } ),
+        [=]( const uint64_t i, const uint64_t j ) {
+          if ( matrix1( i, j ) == true || matrix2( i, j ) == true ) merged( i, j ) = true;
+        } );
 
     WHEN( "They got merged" )
     {
-      crsmat_type mat1( test_util::to_external_crs( matrix1 ) );
-      crsmat_type mat2( test_util::to_external_crs( matrix2 ) );
+      auto x_matrix1 = test_util::to_external_crs( matrix1 );
+      auto x_matrix2 = test_util::to_external_crs( matrix2 );
+
+      crsmat_type mat1( x_matrix1 );
+      crsmat_type mat2( x_matrix2 );
       crsmat_type mmat;
       mmat.assign( merge_distance_index< crsmat_mutable_type >( mat1, mat2 ) );
 
@@ -1045,25 +1032,25 @@ TEMPLATE_SCENARIO_SIG( "Merging two distance indices", "[crsmatrix][bool]",
     constexpr const std::size_t nrows = 200;
     constexpr const std::size_t ncols = 200;
     constexpr const std::size_t offset = 20;
-    std::array< std::array< bool, ncols >, nrows > matrix1;
-    std::array< std::array< bool, ncols >, nrows > matrix2;
-    std::array< std::array< bool, ncols >, nrows > allones;
+    Kokkos::View< bool**, host_space > matrix1( "matrix1", nrows, ncols );
+    Kokkos::View< bool**, host_space > matrix2( "matrix2", nrows, ncols );
+    Kokkos::View< bool**, host_space > allones( "allones", nrows, ncols );
 
-    test_util::zero_matrix( matrix1 );
-    test_util::zero_matrix( matrix2 );
-    test_util::zero_matrix( allones );
-    for ( std::size_t i = 0; i < nrows ; ++i ) {
-      for ( std::size_t j = 0; j < ncols ; ++j ) {
-        if ( i + offset < j ) matrix1[i][j] = true;
-        else matrix2[i][j] = true;
-        allones[i][j] = true;
-      }
-    }
+    Kokkos::parallel_for(
+        "diverg::test_crsmatrix::merge_all_ones",
+        Kokkos::MDRangePolicy< host_space, rank_type >( { 0, 0 }, { nrows, ncols } ),
+        [=]( const uint64_t i, const uint64_t j ) {
+          if ( i + offset < j ) matrix1( i, j ) = true;
+          else matrix2( i, j ) = true;
+          allones( i, j ) = true;
+        } );
 
     WHEN( "They got merged" )
     {
-      crsmat_type mat1( test_util::to_external_crs( matrix1 ) );
-      crsmat_type mat2( test_util::to_external_crs( matrix2 ) );
+      auto x_matrix1 = test_util::to_external_crs( matrix1 );
+      auto x_matrix2 = test_util::to_external_crs( matrix2 );
+      crsmat_type mat1( x_matrix1 );
+      crsmat_type mat2( x_matrix2 );
       crsmat_type mmat;
       mmat.assign( merge_distance_index< crsmat_mutable_type >( mat1, mat2 ) );
 
@@ -1086,6 +1073,7 @@ TEMPLATE_SCENARIO_SIG( "Merging two distance index with large dimensions", "[crs
 {
   typedef CRSMatrix< T, bool, uint16_t, uint32_t > crsmat_type;
   typedef CRSMatrix< U, bool, uint16_t, uint32_t > crsmat_mutable_type;
+  typedef Kokkos::DefaultHostExecutionSpace host_space;
 
   GIVEN( "Two CRS matrices with very large dimensions" )
   {
@@ -1094,12 +1082,12 @@ TEMPLATE_SCENARIO_SIG( "Merging two distance index with large dimensions", "[crs
     constexpr const std::size_t nnz1 = 2400;
     constexpr const std::size_t nrows1 = 200;
     constexpr const std::size_t ncols1 = 200;
-    std::array< std::array< bool, ncols1 >, nrows1 > block1;
+    Kokkos::View< bool**, host_space > block1( "block1", nrows1, ncols1 );
 
     constexpr const std::size_t nnz2 = 4000;
     constexpr const std::size_t nrows2 = 400;
     constexpr const std::size_t ncols2 = 400;
-    std::array< std::array< bool, ncols2 >, nrows2 > block2;
+    Kokkos::View< bool**, host_space > block2( "block2", nrows2, ncols2 );
 
     test_util::random_matrix_ranged( block1, nnz1 );
     test_util::random_matrix_ranged( block2, nnz2 );
