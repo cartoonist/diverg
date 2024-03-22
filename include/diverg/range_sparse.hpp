@@ -1356,6 +1356,298 @@ namespace diverg {
         } );
   }
 
+  /**
+   *  @brief Symbolic phase of computing matrix c as the product of a and b
+   *  (ThreadParallelPartition-HBitVectorAccumulator specialisation).
+   *
+   *  NOTE: All matrices are assumed to be in Range CRS format.
+   *  NOTE: This function assumes `c_rowmap` is allocated on device and is of size
+   *  `a.numRows()+1`.
+   */
+  template< typename THandle,
+            typename TRowMapDeviceViewA, typename TEntriesDeviceViewA,
+            typename TRowMapDeviceViewB, typename TEntriesDeviceViewB,
+            typename TRowMapDeviceViewC, typename TExecGrid,
+            unsigned int TL1Size >
+  inline void
+  _range_spgemm_symbolic( const THandle& handle,
+                          TRowMapDeviceViewA a_rowmap,
+                          TEntriesDeviceViewA a_entries,
+                          TRowMapDeviceViewB b_rowmap,
+                          TEntriesDeviceViewB b_entries,
+                          TRowMapDeviceViewC& c_rowmap,
+                          TExecGrid grid,
+                          ThreadParallelPartition part,
+                          HBitVectorAccumulator< TL1Size > )
+  {
+    typedef TEntriesDeviceViewA a_entries_type;
+    typedef TEntriesDeviceViewB b_entries_type;
+    typedef TRowMapDeviceViewC  c_row_map_type;
+    typedef typename a_entries_type::non_const_value_type ordinal_type;
+    typedef typename c_row_map_type::value_type size_type;
+    typedef typename c_row_map_type::execution_space execution_space;
+    typedef Kokkos::TeamPolicy< execution_space > policy_type;
+    typedef typename policy_type::member_type member_type;
+    typedef diverg::HBitVector< TL1Size, execution_space > hbv_type;
+
+    // TODO: Extend static asserts to all views
+    static_assert(
+        std::is_same< typename a_entries_type::memory_space,
+                      typename b_entries_type::memory_space >::value,
+        "both entries and row map views should be in the same memory space" );
+
+    static_assert(
+        std::is_same< typename a_entries_type::memory_space,
+                      typename c_row_map_type::memory_space >::value,
+        "both entries and row map views should be in the same memory space" );
+
+    auto a_nrows = a_rowmap.extent( 0 ) - 1;
+    auto b_ncols = handle.b_ncols;
+    auto vector_size = grid.vector_size();  // or hbv_type::l1_num_bitsets();
+    auto team_size = grid.team_size();
+    auto policy = policy_type( a_nrows, team_size, vector_size );
+    hbv_type::set_scratch_size( policy, b_ncols );
+
+    Kokkos::parallel_for(
+        "diverg::crs_matrix::range_spgemm_symbolic::count_row_nnz", policy,
+        KOKKOS_LAMBDA( const member_type& tm ) {
+          auto row = tm.league_rank();
+          auto a_idx = a_rowmap( row );
+          auto a_end = a_rowmap( row + 1 );
+          hbv_type hbv( tm, b_ncols, row );
+          // min entry (bitset aligned) in the current `row` in C
+          ordinal_type c_min;
+          // max entry + 1 (bitset aligned) in the current `row` in C
+          ordinal_type c_max;
+
+          // Setting all L1 bitsets in `h_bv` to zero
+          hbv.clear_l1( tm );
+          hbv.clear_l2( tm );
+
+          tm.team_barrier();
+
+          Kokkos::parallel_reduce(
+              Kokkos::TeamThreadRange( tm, a_idx / 2, a_end / 2 ),
+              [&]( const uint64_t ii,
+                   ordinal_type& lc_min, ordinal_type& lc_max ) {
+                auto i = ii * 2;
+                auto b_row = a_entries( i );
+                auto b_last_row = a_entries( i + 1 );
+                ordinal_type br_min = lc_min;  // B row range min
+                ordinal_type br_max = lc_max;  // B row range max
+                for ( ; b_row <= b_last_row; ++b_row ) {
+                  auto b_idx = b_rowmap( b_row );
+                  auto b_end = b_rowmap( b_row + 1 );
+
+                  if ( b_idx == b_end ) continue;
+
+                  auto b_min = b_entries( b_idx );
+                  if ( b_min < br_min ) {
+                    b_min = hbv_type::aligned_index( b_min );
+                    br_min = b_min;  // update br_min
+                  }
+                  auto b_max = b_entries( b_end - 1 ) + 1;
+                  if ( br_max < b_max ) {
+                    b_max = hbv_type::aligned_index_ceil( b_max );
+                    br_max = b_max;  // update br_max
+                  }
+
+                  for ( ; b_idx < b_end; b_idx += 2 ) {
+                    auto s = b_entries( b_idx );
+                    auto f = b_entries( b_idx + 1 );
+                    hbv.set( tm, s, f, part );
+                  }
+                }
+                if ( br_min < lc_min ) lc_min = br_min;
+                if ( br_max > lc_max ) lc_max = br_max;
+              },
+              Kokkos::Min< ordinal_type >( c_min ),
+              Kokkos::Max< ordinal_type >( c_max ) );
+
+          if ( c_max < c_min ) c_max = c_min;
+          auto c_lbs = hbv_type::bindex( c_min );
+          auto c_rbs = hbv_type::bindex( c_max );
+          ordinal_type count = 0;
+          Kokkos::parallel_reduce(
+              Kokkos::TeamVectorRange( tm, c_lbs, c_rbs ),
+              [=]( const uint64_t j, ordinal_type& local_count ) {
+                auto c = ( j != c_lbs ) ? hbv_type::msb( hbv( j - 1 ) ) : 0;
+                local_count += 2 * hbv_type::cnt01( hbv( j ), c );
+              },
+              count );
+
+          Kokkos::single( Kokkos::PerTeam( tm ), [=]() {
+            c_rowmap( row + 1 ) = count;
+            if ( row == 0 ) c_rowmap( 0 ) = 0;
+          } );
+        } );
+
+    Kokkos::parallel_scan(
+        "diverg::crs_matrix::range_spgemm_symbolic::computing_row_map_c", a_nrows,
+        KOKKOS_LAMBDA( const int i, size_type& update, const bool final ) {
+          // Load old value in case we update it before accumulating
+          const size_type val_ip1 = c_rowmap( i + 1 );
+          update += val_ip1;
+          if ( final )
+            c_rowmap( i + 1 ) = update;  // only update array on final pass
+        } );
+  }
+
+  /**
+   *  @brief Numeric phase of computing matrix c as the product of a and b
+   *  (ThreadParallelPartition-HBitVectorAccumulator specialisation).
+   *
+   *  NOTE: All matrices are assumed to be in Range CRS format.
+   *  NOTE: This function assumes `c_rowmap` and `c_entries` are allocated on
+   *        device with sufficient space.
+   */
+  template< typename THandle,
+            typename TRowMapDeviceViewA, typename TEntriesDeviceViewA,
+            typename TRowMapDeviceViewB, typename TEntriesDeviceViewB,
+            typename TRowMapDeviceViewC, typename TEntriesDeviceViewC,
+            typename TExecGrid, unsigned int TL1Size >
+  inline void
+  _range_spgemm_numeric( const THandle& handle,
+                         TRowMapDeviceViewA a_rowmap,
+                         TEntriesDeviceViewA a_entries,
+                         TRowMapDeviceViewB b_rowmap,
+                         TEntriesDeviceViewB b_entries,
+                         TRowMapDeviceViewC c_rowmap,
+                         TEntriesDeviceViewC& c_entries,
+                         TExecGrid grid,
+                         ThreadParallelPartition part,
+                         HBitVectorAccumulator< TL1Size > )
+  {
+    typedef TEntriesDeviceViewA a_entries_type;
+    typedef TEntriesDeviceViewB b_entries_type;
+    typedef TEntriesDeviceViewC c_entries_type;
+    typedef TRowMapDeviceViewC  c_row_map_type;
+    typedef typename c_entries_type::value_type ordinal_type;
+    typedef typename c_row_map_type::value_type size_type;
+    typedef typename c_entries_type::execution_space execution_space;
+    typedef Kokkos::TeamPolicy< execution_space > policy_type;
+    typedef typename policy_type::member_type member_type;
+    typedef diverg::HBitVector< TL1Size, execution_space > hbv_type;
+
+    // TODO: Extend static asserts to all views
+    static_assert(
+        std::is_same< typename a_entries_type::memory_space,
+                      typename b_entries_type::memory_space >::value,
+        "both entries and row map views should be in the same memory space" );
+
+    static_assert(
+        std::is_same< typename a_entries_type::memory_space,
+                      typename c_row_map_type::memory_space >::value,
+        "both entries and row map views should be in the same memory space" );
+
+    auto a_nrows = a_rowmap.extent( 0 ) - 1;
+    auto b_ncols = handle.b_ncols;
+    auto vector_size = grid.vector_size();  // or hbv_type::l1_num_bitsets();
+    auto team_size = grid.team_size();
+    auto policy = policy_type( a_nrows, team_size, vector_size );
+    hbv_type::set_scratch_size( policy, b_ncols );
+
+    Kokkos::parallel_for(
+        "diverg::crs_matrix::range_spgemm_numeric::accumulate_hbv", policy,
+        KOKKOS_LAMBDA( const member_type& tm ) {
+          auto row = tm.league_rank();
+          auto a_idx = a_rowmap( row );
+          auto a_end = a_rowmap( row + 1 );
+          hbv_type hbv( tm, b_ncols, row );
+          // min entry (bitset aligned) in the current `row` in C
+          ordinal_type c_min;
+          // max entry + 1 (bitset aligned) in the current `row` in C
+          ordinal_type c_max;
+
+          // Setting all L1 bitsets in `h_bv` to zero
+          hbv.clear_l1( tm );
+          hbv.clear_l2( tm );
+
+          tm.team_barrier();
+
+          Kokkos::parallel_reduce(
+              Kokkos::TeamThreadRange( tm, a_idx / 2, a_end / 2 ),
+              [&]( const uint64_t ii,
+                   ordinal_type& lc_min, ordinal_type& lc_max ) {
+                auto i = ii * 2;
+                auto b_row = a_entries( i );
+                auto b_last_row = a_entries( i + 1 );
+                ordinal_type br_min = lc_min;  // B row range min
+                ordinal_type br_max = lc_max;  // B row range max
+                for ( ; b_row <= b_last_row; ++b_row ) {
+                  auto b_idx = b_rowmap( b_row );
+                  auto b_end = b_rowmap( b_row + 1 );
+
+                  if ( b_idx == b_end ) continue;
+
+                  auto b_min = b_entries( b_idx );
+                  if ( b_min < br_min ) {
+                    b_min = hbv_type::aligned_index( b_min );
+                    br_min = b_min;  // update br_min
+                  }
+                  auto b_max = b_entries( b_end - 1 ) + 1;
+                  if ( br_max < b_max ) {
+                    b_max = hbv_type::aligned_index_ceil( b_max );
+                    br_max = b_max;  // update br_max
+                  }
+
+                  for ( ; b_idx < b_end; b_idx += 2 ) {
+                    auto s = b_entries( b_idx );
+                    auto f = b_entries( b_idx + 1 );
+                    hbv.set( tm, s, f, part );
+                  }
+                }
+                if ( br_min < lc_min ) lc_min = br_min;
+                if ( br_max > lc_max ) lc_max = br_max;
+              },
+              Kokkos::Min< ordinal_type >( c_min ),
+              Kokkos::Max< ordinal_type >( c_max ) );
+
+          if ( c_max < c_min ) c_max = c_min;
+          auto c_lbs = hbv_type::bindex( c_min );
+          auto c_rbs = hbv_type::bindex( c_max );
+          Kokkos::parallel_for(
+              Kokkos::TeamThreadRange( tm, c_lbs, c_rbs ),
+              [=]( const uint64_t j ) {
+                auto c = ( j != c_lbs ) ? hbv_type::msb( hbv( j - 1 ) ) : 0;
+                auto x = hbv( j );
+                auto bounds = hbv_type::map01( x, c ) | hbv_type::map10( x, c );
+
+                if ( bounds != 0 ) {
+                  size_type c_idx = 0;
+                  Kokkos::parallel_reduce(
+                      Kokkos::ThreadVectorRange( tm, c_lbs, j ),
+                      [=]( const uint64_t k, size_type& lci ) {
+                        auto c = ( k != c_lbs )
+                                     ? hbv_type::msb( hbv( k - 1 ) )
+                                     : 0;
+                        auto x = hbv( k );
+                        lci += hbv_type::cnt01( x, c )
+                               + hbv_type::cnt10( x, c );
+                      },
+                      c_idx );
+                  c_idx += c_rowmap( row );
+
+                  Kokkos::parallel_for(
+                      Kokkos::ThreadVectorRange( tm, hbv_type::cnt( bounds ) ),
+                      [=]( const uint64_t k ) {
+                        auto lidx = c_idx + k;
+                        c_entries( lidx ) = hbv_type::start_index( j )
+                                            + hbv_type::sel( bounds, k + 1 )
+                                            - lidx % 2;
+                      } );
+                }
+              } );
+
+          Kokkos::single( Kokkos::PerTeam( tm ), [=]() {
+            if ( c_lbs < c_rbs && hbv_type::msb( hbv( c_rbs - 1 ) ) ) {
+              c_entries( c_rowmap( row + 1 ) - 1 )
+                  = hbv_type::start_index( c_rbs ) - 1;
+            }
+          } );
+        } );
+  }
+
   template< typename THandle,
             typename TRowMapDeviceViewA, typename TEntriesDeviceViewA,
             typename TRowMapDeviceViewB, typename TEntriesDeviceViewB,
