@@ -481,6 +481,102 @@ kokkos_kernels_power( TXCRSMatrix const& a, unsigned int n )
   return c;
 }
 
+  template< typename THandle,
+            typename TRowMapDeviceViewA, typename TEntriesDeviceViewA,
+            typename TRowMapDeviceViewB, typename TEntriesDeviceViewB,
+            typename TRowMapDeviceViewC, typename TEntriesDeviceViewC,
+            typename TSparseConfig=DefaultSparseConfiguration >
+  inline void
+  local_range_spgemm( const THandle& handle,
+                TRowMapDeviceViewA a_rowmap, TEntriesDeviceViewA a_entries,
+                TRowMapDeviceViewB b_rowmap, TEntriesDeviceViewB b_entries,
+                TRowMapDeviceViewC& c_rowmap, TEntriesDeviceViewC& c_entries,
+                TSparseConfig config={} )
+  {
+    typedef TEntriesDeviceViewC c_entries_type;
+    typedef TRowMapDeviceViewC  c_row_map_type;
+    typedef typename c_entries_type::value_type ordinal_type;
+    typedef typename c_row_map_type::value_type size_type;
+
+    assert( handle.a_ncols == static_cast< ordinal_type >( b_rowmap.extent( 0 ) - 1 ) );
+    DIVERG_ASSERT( handle.a_ncols <= std::numeric_limits< ordinal_type >::max() - 1 );
+    DIVERG_ASSERT( handle.b_ncols <= std::numeric_limits< ordinal_type >::max() - 1 );
+
+    ordinal_type n = a_rowmap.extent( 0 ) - 1;
+    c_rowmap = c_row_map_type(
+        Kokkos::ViewAllocateWithoutInitializing( "c_rowmap" ),
+        a_rowmap.extent( 0 ) );
+
+#ifdef DIVERG_STATS
+    Kokkos::Timer timer;
+#endif
+
+    range_spgemm_symbolic( handle, a_rowmap, a_entries, b_rowmap, b_entries,
+                           c_rowmap, config );
+
+#ifdef DIVERG_STATS
+    double d = timer.seconds();
+    std::cout << "diverg::range_spgemm_symbolic time: " << d * 1000 << "ms"
+              << std::endl;
+#endif
+
+    size_type c_rnnz;
+    auto h_c_rowmap = Kokkos::create_mirror_view( c_rowmap );
+    Kokkos::deep_copy( h_c_rowmap, c_rowmap );
+    c_rnnz = h_c_rowmap( n );
+    KokkosKernels::Impl::print_1Dview( h_c_rowmap, true );
+    c_entries = c_entries_type( Kokkos::ViewAllocateWithoutInitializing( "C" ),
+                                c_rnnz );
+
+#ifdef DIVERG_STATS
+    timer.reset();
+#endif
+
+    range_spgemm_numeric( handle, a_rowmap, a_entries, b_rowmap, b_entries,
+                          c_rowmap, c_entries, config );
+
+#ifdef DIVERG_STATS
+    d = timer.seconds();
+    std::cout << "diverg::range_spgemm_numeric time: " << d * 1000 << "ms"
+              << std::endl;
+#endif
+  }
+
+  template< typename TRCRSMatrix,
+            typename TSparseConfig=DefaultSparseConfiguration >
+  inline TRCRSMatrix
+  local_range_spgemm( TRCRSMatrix const& a, TRCRSMatrix const& b,
+                TSparseConfig config={} )
+  {
+    typedef TRCRSMatrix range_crsmatrix_t;
+    typedef typename range_crsmatrix_t::ordinal_type ordinal_type;
+    //typedef TSparseConfig config_type;
+    //typedef typename config_type::execution_space execution_space;
+
+    assert( a.numCols() == b.numRows() );
+    DIVERG_ASSERT( a.numCols() <= std::numeric_limits< ordinal_type >::max() - 1 );
+    DIVERG_ASSERT( b.numCols() <= std::numeric_limits< ordinal_type >::max() - 1 );
+
+    auto a_entries = a.entries_device_view( config.space );
+    auto a_rowmap = a.rowmap_device_view( config.space );
+    auto b_entries = b.entries_device_view( config.space );
+    auto b_rowmap = b.rowmap_device_view( config.space );
+
+    auto c_entries = range_crsmatrix_t::make_entries_device_view( config.space );
+    auto c_rowmap = range_crsmatrix_t::make_rowmap_device_view( config.space );
+
+    SparseRangeHandle handle( a, b );
+
+    local_range_spgemm( handle, a_rowmap, a_entries, b_rowmap, b_entries, c_rowmap,
+                  c_entries, config );
+
+    // FIXME: since entries and rowmap arrays of range CRS is not a view, there
+    // would be an extra copy here and the `c_entries` and `c_rowmap` cannot be
+    // moved when the views are on the same memory space (the RCRS ctor does call
+    // `deep_copy`).
+    return TRCRSMatrix( b.numCols(), c_entries, c_rowmap );
+  }
+
 TEMPLATE_SCENARIO_SIG( "Validation and verification of range SpGEMM", "[range_sparse]",
     ( ( typename TAccumulator, typename TPartition, typename TSpec, typename TScalar, typename TOrdinal, typename TSize, int N, int NNZ ),
       TAccumulator, TPartition, TSpec, TScalar, TOrdinal, TSize, N, NNZ ),
@@ -508,10 +604,15 @@ TEMPLATE_SCENARIO_SIG( "Validation and verification of range SpGEMM", "[range_sp
     REQUIRE( rrand_mat.nnz() == NNZ );
     REQUIRE( is_same( xrand_mat, rrand_mat ) );
 
+    //diverg::print( xrand_mat );
+    //diverg::print( rrand_mat );
+
     WHEN( "It is multiplied to itself" )
     {
       auto xc = kokkos_kernels_spgemm( xrand_mat, xrand_mat );
-      auto rc = range_spgemm( rrand_mat, rrand_mat, config_type{} );
+      //diverg::print( xc, true, true );
+      auto rc = local_range_spgemm( rrand_mat, rrand_mat, config_type{} );
+      //diverg::print( rc, "RC", true, true );
       REQUIRE( is_same( xc, rc ) );
     }
   }

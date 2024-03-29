@@ -1181,6 +1181,10 @@ namespace diverg {
                   }
                 }
 
+                printf( "(team, thread, row, l1_data): (%d,\t%d,\t%lu,\t%p,\t%d,\t%d)\n",
+                        tm.league_rank(), tm.team_rank(), row, hbv.l1_data, c_min, c_max );
+                printf( "\t%d: l1[0]: %x\n", tm.team_rank(), hbv.l1_data[ 0 ] );
+
                 auto c_lbs = hbv_type::bindex( c_min );
                 auto c_rbs = hbv_type::bindex( c_max );
                 ordinal_type count = 0;
