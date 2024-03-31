@@ -105,6 +105,8 @@ namespace diverg {
   print( diverg::CRSMatrix< TSpec, bool, TOrdinal, TSize >& m,
          std::string label = {}, bool verbose = true, bool print_all = false )
   {
+    typedef TOrdinal ordinal_type;
+
     if ( label.empty() ) label = "A";
 
     std::cout << "[INFO] Matrix '" << label << "'"
@@ -122,7 +124,7 @@ namespace diverg {
 
       auto width = std::log( m.numRows() ) + 1;
       std::cout << "   ... " << std::setw( width - 2 ) << label << " = [" << std::endl;
-      for ( std::size_t i = 0; i < m.numRows(); ++i ) {
+      for ( ordinal_type i = 0; i < m.numRows(); ++i ) {
         std::cout << "   ... " << std::setw( width ) << i << ": ";
         auto end = m.rowMap( i + 1 );
         for ( auto j = m.rowMap( i ); j < end; j += 2 ) {
@@ -1120,8 +1122,9 @@ namespace diverg {
         "diverg::crs_matrix::range_spgemm_symbolic::count_row_nnz", policy,
         KOKKOS_LAMBDA( const member_type& tm ) {
           auto rank = tm.league_rank();
-          auto a_row = rank * work_size;
-          auto a_last_row = DIVERG_MACRO_MIN( a_row + work_size, a_nrows );
+          size_type a_row = rank * work_size;
+          size_type a_last_row = a_row + work_size;
+          a_last_row = DIVERG_MACRO_MIN( a_last_row, a_nrows );
           hbv_type hbv( tm, b_ncols, part );
 
           Kokkos::parallel_for(
@@ -1263,8 +1266,9 @@ namespace diverg {
         "diverg::crs_matrix::range_spgemm_numeric::accumulate_hbv", policy,
         KOKKOS_LAMBDA( const member_type& tm ) {
           auto rank = tm.league_rank();
-          auto a_row = rank * work_size;
-          auto a_last_row = DIVERG_MACRO_MIN( a_row + work_size, a_nrows );
+          size_type a_row = rank * work_size;
+          size_type a_last_row = a_row + work_size;
+          a_last_row = DIVERG_MACRO_MIN( a_last_row, a_nrows );
           hbv_type hbv( tm, b_ncols, part );
 
           Kokkos::parallel_for(
