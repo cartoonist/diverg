@@ -870,7 +870,7 @@ namespace diverg {
 
   /**
    *  @brief Symbolic phase of computing matrix c as the product of a and b
-   *  (ThreadRangePartition-BTreeAccumulator specialisation).
+   *  (ThreadRangePolicyPartition-BTreeAccumulator specialisation).
    *
    *  NOTE: All matrices are assumed to be in Range CRS format.
    *  NOTE: This function assumes `c_rowmap` is allocated on device and is of
@@ -887,7 +887,7 @@ namespace diverg {
                           TRowMapDeviceViewB b_rowmap,
                           TEntriesDeviceViewB b_entries,
                           TRowMapDeviceViewC& c_rowmap,
-                          TExecGrid, ThreadRangePartition, BTreeAccumulator )
+                          TExecGrid, ThreadRangePolicyPartition, BTreeAccumulator )
   {
     typedef TEntriesDeviceViewA a_entries_type;
     typedef TEntriesDeviceViewB b_entries_type;
@@ -972,7 +972,7 @@ namespace diverg {
 
   /**
    *  @brief Numeric phase of computing matrix c as the product of a and b
-   *         (ThreadRangePartition-BTreeAccumulator specialisation).
+   *         (ThreadRangePolicyPartition-BTreeAccumulator specialisation).
    *
    *  NOTE: All matrices are assumed to be in Range CRS format.
    *  NOTE: This function assumes `c_rowmap` and `c_entries` are allocated on
@@ -991,7 +991,7 @@ namespace diverg {
                          TEntriesDeviceViewB b_entries,
                          TRowMapDeviceViewC c_rowmap,
                          TEntriesDeviceViewC& c_entries,
-                         TExecGrid, ThreadRangePartition, BTreeAccumulator )
+                         TExecGrid, ThreadRangePolicyPartition, BTreeAccumulator )
   {
     typedef TEntriesDeviceViewA a_entries_type;
     typedef TEntriesDeviceViewB b_entries_type;

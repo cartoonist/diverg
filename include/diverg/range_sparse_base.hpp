@@ -52,14 +52,14 @@ namespace diverg {
   };
 
   // Partition specialisation tag
-  struct ThreadRangeTag {};
+  struct ThreadRangePolicyTag {};
   struct ThreadSequentialTag {};
   struct TeamSequentialTag {};
   struct ThreadParallelTag {};
   struct ThreadRangeParallelTag {};
   struct TeamFlatParallelTag {};
 
-  using ThreadRangePartition = ExecPartition< ThreadRangeTag >;
+  using ThreadRangePolicyPartition = ExecPartition< ThreadRangePolicyTag >;
   using ThreadSequentialPartition = ExecPartition< ThreadSequentialTag >;
   using TeamSequentialPartition = ExecPartition< TeamSequentialTag >;
   using ThreadParallelPartition = ExecPartition< ThreadParallelTag >;
@@ -84,7 +84,7 @@ namespace diverg {
   template< >
   struct AccumulatorDefaultPartition< BTreeAccumulator >
   {
-    using type = ThreadRangePartition;
+    using type = ThreadRangePolicyPartition;
   };
 
   template< unsigned int TL1Size >

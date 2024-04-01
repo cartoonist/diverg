@@ -484,7 +484,7 @@ kokkos_kernels_power( TXCRSMatrix const& a, unsigned int n )
 TEMPLATE_SCENARIO_SIG( "Validation and verification of range SpGEMM", "[range_sparse]",
     ( ( typename TAccumulator, typename TPartition, typename TSpec, typename TScalar, typename TOrdinal, typename TSize, int N, int NNZ ),
       TAccumulator, TPartition, TSpec, TScalar, TOrdinal, TSize, N, NNZ ),
-    ( ( BTreeAccumulator ), ThreadRangePartition, ( crs_matrix::RangeDynamic ), char, int32_t, uint64_t, 6521, 200000 ),
+    ( ( BTreeAccumulator ), ThreadRangePolicyPartition, ( crs_matrix::RangeDynamic ), char, int32_t, uint64_t, 6521, 200000 ),
     ( ( HBitVectorAccumulator<> ), TeamSequentialPartition, ( crs_matrix::RangeDynamic ), char, int32_t, uint64_t, 6521, 200000 ),
     ( ( HBitVectorAccumulator<> ), ThreadRangeParallelPartition, ( crs_matrix::RangeDynamic ), char, int32_t, uint64_t, 6521, 200000 ),
     ( ( HBitVectorAccumulator<> ), ThreadParallelPartition, ( crs_matrix::RangeDynamic ), char, int32_t, uint64_t, 6521, 200000 ) )
@@ -539,7 +539,7 @@ TEMPLATE_SCENARIO_SIG( "Validation and verification of range SpGEMM", "[range_sp
 TEMPLATE_SCENARIO_SIG( "Validation and verification of range power", "[range_sparse]",
     ( ( typename TAccumulator, typename TPartition, typename TSpec, typename TScalar, typename TOrdinal, typename TSize, int N, int NNZ, int K ),
       TAccumulator, TPartition, TSpec, TScalar, TOrdinal, TSize, N, NNZ, K ),
-    ( ( BTreeAccumulator ), ThreadRangePartition, ( crs_matrix::RangeDynamic ), char, int32_t, uint64_t, 6521, 4000, 100 ),
+    ( ( BTreeAccumulator ), ThreadRangePolicyPartition, ( crs_matrix::RangeDynamic ), char, int32_t, uint64_t, 6521, 4000, 100 ),
     ( ( HBitVectorAccumulator<> ), TeamSequentialPartition, ( crs_matrix::RangeDynamic ), char, int32_t, uint64_t, 6521, 4000, 100 ),
     ( ( HBitVectorAccumulator<> ), ThreadRangeParallelPartition, ( crs_matrix::RangeDynamic ), char, int32_t, uint64_t, 6521, 4000, 100 ),
     ( ( HBitVectorAccumulator<> ), ThreadParallelPartition, ( crs_matrix::RangeDynamic ), char, int32_t, uint64_t, 6521, 4000, 100 ) )
