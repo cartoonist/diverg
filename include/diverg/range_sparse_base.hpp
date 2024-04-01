@@ -56,12 +56,14 @@ namespace diverg {
   struct ThreadSequentialTag {};
   struct TeamSequentialTag {};
   struct ThreadParallelTag {};
+  struct ThreadRangeParallelTag {};
   struct TeamFlatParallelTag {};
 
   using ThreadRangePartition = ExecPartition< ThreadRangeTag >;
   using ThreadSequentialPartition = ExecPartition< ThreadSequentialTag >;
   using TeamSequentialPartition = ExecPartition< TeamSequentialTag >;
   using ThreadParallelPartition = ExecPartition< ThreadParallelTag >;
+  using ThreadRangeParallelPartition = ExecPartition< ThreadRangeParallelTag >;
   using TeamFlatParallelPartition = ExecPartition< TeamFlatParallelTag >;
 
   // Supported execution space by accumulators
