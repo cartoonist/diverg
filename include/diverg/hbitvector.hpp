@@ -46,6 +46,29 @@ namespace diverg {
   };
 #endif
 
+  struct Safe {};
+  struct UnsafeAtBoundaries {};
+  struct Unsafe {};
+
+  template< typename TSpec >
+  struct HBVThreadAccess {};
+
+  template< typename TPartition >
+  struct GetHBVThreadAccess;
+
+  template< typename TSpec >
+  struct GetHBVThreadAccess< ExecPartition< TSpec > > {
+    using type = HBVThreadAccess< Unsafe >;
+  };
+
+  template<>
+  struct GetHBVThreadAccess< TeamSequentialPartition > {
+    using type = HBVThreadAccess< UnsafeAtBoundaries >;
+  };
+
+  template< typename TPartition >
+  using GetHBVThreadAccessType = typename GetHBVThreadAccess< TPartition >::type;
+
   /**
    *  @brief  Hierarchical (two-level) bit vector
    *
@@ -668,14 +691,15 @@ namespace diverg {
       }
 
       /**
-       *   @brief Set a bit in the vector (ThreadSequential)
+       *   @brief Set a bit in the vector with Safe access
+       *          (e.g. in ThreadSequentialParititon)
        *
        *   NOTE: The function should be called by a single thread/lane once.
        *
        *   NOTE: All write access are NON-atomic.
        */
       KOKKOS_INLINE_FUNCTION void
-      set( size_type idx, ThreadSequentialPartition ) noexcept
+      set( size_type idx, HBVThreadAccess< Safe > ) noexcept
       {
         assert( idx < this->m_x_size );
 
@@ -694,7 +718,7 @@ namespace diverg {
 
       /**
        *   @brief Set a bit in the vector
-       *          (TeamSequential/ThreadParallel/TeamFlatParallel)
+       *          (TeamSequential/ThreadParallel/TeamFlatParallel/etc)
        *
        *   NOTE: The function should be called by a single thread to be run on
        *         a vector lane (sequential).
@@ -702,9 +726,8 @@ namespace diverg {
        *   NOTE: All write access are atomic.
        */
       template< typename TSpec >
-      KOKKOS_INLINE_FUNCTION std::enable_if_t<
-          !std::is_same< TSpec, ThreadSequentialTag >::value >
-      set( size_type idx, ExecPartition< TSpec > ) noexcept
+      KOKKOS_INLINE_FUNCTION std::enable_if_t< !std::is_same< TSpec, Safe >::value >
+      set( size_type idx, HBVThreadAccess< TSpec > ) noexcept
       {
         assert( idx < this->m_x_size );
 
@@ -721,8 +744,16 @@ namespace diverg {
         }
       }
 
+      template< typename TSpec >
+      KOKKOS_INLINE_FUNCTION void
+      set( size_type idx, ExecPartition< TSpec > ) noexcept
+      {
+        this->set( idx, GetHBVThreadAccessType< ExecPartition< TSpec > >{} );
+      }
+
       /**
-       *   @brief Set a range of bits in the vector (TeamSequential)
+       *   @brief Set a range of bits in the vector with UnsafeAtBoundaries access
+       *          (e.g. in TeamSequentialPartition)
        *
        *   NOTE: The function should be called by a team to be run by a single
        *         thread (vector parallelism).
@@ -732,7 +763,7 @@ namespace diverg {
        */
       KOKKOS_INLINE_FUNCTION void
       set( const member_type& tm, size_type s_idx, size_type f_idx,
-           TeamSequentialPartition tag ) noexcept
+            HBVThreadAccess< UnsafeAtBoundaries > tag ) noexcept
       {
         assert( s_idx <= f_idx );
         assert( f_idx < this->m_x_size );
@@ -810,14 +841,15 @@ namespace diverg {
       }
 
       /**
-       *   @brief Set a range of bits in the vector (ThreadParallel)
+       *   @brief Set a range of bits in the vector with Unsafe access
+       *          (e.g. in ThreadParallel)
        *
        *   NOTE: The function should be called by a team to be run by a single
        *         thread (vector parallelism).
        */
       KOKKOS_INLINE_FUNCTION void
       set( const member_type& tm, size_type s_idx, size_type f_idx,
-           ThreadParallelPartition tag ) noexcept
+            HBVThreadAccess< Unsafe > tag ) noexcept
       {
         assert( s_idx <= f_idx );
         assert( f_idx < this->m_x_size );
@@ -894,14 +926,24 @@ namespace diverg {
         }
       }
 
+      template< typename TSpec >
       KOKKOS_INLINE_FUNCTION void
-      set( size_type s_idx, size_type f_idx )
+      set( const member_type& tm, size_type s_idx, size_type f_idx,
+           ExecPartition< TSpec > ) noexcept
+      {
+        this->set( tm, s_idx, f_idx,
+                    GetHBVThreadAccessType< ExecPartition< TSpec > >{} );
+      }
+
+      KOKKOS_INLINE_FUNCTION void
+      _set( const member_type& tm, size_type s_idx, size_type f_idx,
+            HBVThreadAccess< UnsafeAtBoundaries > tac )
       {
         assert( s_idx <= f_idx );
         assert( f_idx < this->m_x_size );
 
         if ( s_idx == f_idx )
-          return this->set( f_idx, TeamSequentialPartition{} );
+          return this->set( f_idx, tac );
 
         auto rs_idx = this->relative_idx( s_idx );
         auto rf_idx = this->relative_idx( f_idx );
