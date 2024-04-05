@@ -69,7 +69,7 @@ TEMPLATE_SCENARIO_SIG(
     auto policy = policy_type( len, Kokkos::AUTO );
 
     WHEN( "Setting scratch size" ) {
-      hbv_type::set_scratch_size( policy, len );
+      hbv_type::set_scratch_size( policy, len, HBVAccessLevel< TeamLevel >{} );
 
       THEN( "L1 scratch size should be equal to the given template parameter" ) {
         REQUIRE( policy.scratch_size( 0 ) == hbv_type::L1_SIZE_BYTES );
@@ -120,14 +120,15 @@ TEMPLATE_SCENARIO_SIG(
     WHEN( "Initialising the hierarchical bitvector inside a Kokkos kernel" )
     {
       auto policy = policy_type( len, Kokkos::AUTO );
-      hbv_type::set_scratch_size( policy, len );
+      HBVAccessLevel< TeamLevel > team_level;
+      hbv_type::set_scratch_size( policy, len, team_level );
 
       Kokkos::View< unsigned char* > flags( "flags", len );
       Kokkos::parallel_for(
           "diverg::test_hbitvector::l1_begin", policy,
           KOKKOS_LAMBDA ( const member_type& tm ) {
             auto row = tm.league_rank();
-            hbv_type hbv( tm, len, row );
+            hbv_type hbv( tm, len, row, team_level );
             Kokkos::single( Kokkos::PerTeam( tm ), [=]() {
               if ( hbv.l1_begin == true_begins( row ) ) flags( row ) = 1;
               /*
@@ -254,18 +255,19 @@ TEMPLATE_SCENARIO_SIG(
             if ( i == 0 ) crs_nnz() = 0;
           } );
 
+      TeamSequentialPartition part;
       auto policy = policy_type( nrows, Kokkos::AUTO );
-      hbv_type::set_scratch_size( policy, len );
+      hbv_type::set_scratch_size( policy, len, part );
       Kokkos::parallel_for(
           "diverg::test_hbitvector::set_range", policy,
           KOKKOS_LAMBDA ( const member_type& tm ) {
             auto row = tm.league_rank();
-            hbv_type hbv( tm, len, ( row + 1 ) * 1000 );
+            hbv_type hbv( tm, len, ( row + 1 ) * 1000, part );
             auto e_idx = row_map( row );
             auto e_end = row_map( row + 1 );
 
-            hbv.clear_l1( tm );
-            hbv.clear_l2( tm );
+            hbv.clear_l1( tm, part );
+            hbv.clear_l2( tm, part );
 
             Kokkos::parallel_for(
                 Kokkos::TeamThreadRange( tm, e_idx / 2, e_end / 2 ),
@@ -273,7 +275,7 @@ TEMPLATE_SCENARIO_SIG(
                   auto j = jj * 2;
                   auto s = e( j );
                   auto f = e( j + 1 );
-                  hbv.set( tm, s, f, TeamSequentialPartition{} );
+                  hbv.set( tm, s, f, part );
                 } );
 
             tm.team_barrier();
@@ -413,18 +415,19 @@ TEMPLATE_SCENARIO_SIG(
             if ( i == 0 ) crs_nnz() = 0;
           } );
 
+      TeamSequentialPartition part;
       auto policy = policy_type( nrows, Kokkos::AUTO );
-      hbv_type::set_scratch_size( policy, len );
+      hbv_type::set_scratch_size( policy, len, part );
       Kokkos::parallel_for(
           "diverg::test_hbitvector::set_range", policy,
           KOKKOS_LAMBDA ( const member_type& tm ) {
             auto row = tm.league_rank();
-            hbv_type hbv( tm, len, ( row + 1 ) * 1000 );
+            hbv_type hbv( tm, len, ( row + 1 ) * 1000, part );
             auto e_idx = row_map( row );
             auto e_end = row_map( row + 1 );
 
-            hbv.clear_l1( tm );
-            hbv.clear_l2( tm );
+            hbv.clear_l1( tm, part );
+            hbv.clear_l2( tm, part );
 
             Kokkos::parallel_for(
                 Kokkos::TeamThreadRange( tm, e_idx / 2, e_end / 2 ),
@@ -432,7 +435,7 @@ TEMPLATE_SCENARIO_SIG(
                   auto j = jj * 2;
                   auto s = e( j );
                   auto f = e( j + 1 );
-                  hbv.set( tm, s, f, TeamSequentialPartition{} );
+                  hbv.set( tm, s, f, part );
                 } );
 
             tm.team_barrier();
@@ -658,20 +661,21 @@ TEMPLATE_SCENARIO_SIG(
       auto h_c_rowmap = Kokkos::create_mirror_view( c_rowmap );
 
       // Allocating space required for hbitvector
+      TeamSequentialPartition part;
       auto policy = policy_type( nrows, Kokkos::AUTO );
-      hbv_type::set_scratch_size( policy, len );
+      hbv_type::set_scratch_size( policy, len, part );
 
       // Computing `c_rowmap`
       Kokkos::parallel_for(
           "diverg::test_hbitvector::count_row_nnz", policy,
           KOKKOS_LAMBDA ( const member_type& tm ) {
             auto row = tm.league_rank();
-            hbv_type hbv( tm, len, ( row + 1 ) * 1000 );
+            hbv_type hbv( tm, len, ( row + 1 ) * 1000, part );
             auto e_idx = row_map( row );
             auto e_end = row_map( row + 1 );
 
-            hbv.clear_l1( tm );
-            hbv.clear_l2( tm );
+            hbv.clear_l1( tm, part );
+            hbv.clear_l2( tm, part );
 
             Kokkos::parallel_for(
                 Kokkos::TeamThreadRange( tm, e_idx / 2, e_end / 2 ),
@@ -679,7 +683,7 @@ TEMPLATE_SCENARIO_SIG(
                   auto j = jj * 2;
                   auto s = e( j );
                   auto f = e( j + 1 );
-                  hbv.set( tm, s, f, TeamSequentialPartition{} );
+                  hbv.set( tm, s, f, part );
                 } );
 
             tm.team_barrier();
@@ -726,17 +730,18 @@ TEMPLATE_SCENARIO_SIG(
         Kokkos::View< uint32_t* > c_e( "acc_entries", h_c_rowmap( nrows ) );
         auto h_c_e = Kokkos::create_mirror( c_e );
 
+        TeamSequentialPartition part;
         // Calculating `c_e`
         Kokkos::parallel_for(
             "diverg::test_hbitvector::accumulate_entries", policy,
             KOKKOS_LAMBDA ( const member_type& tm ) {
               auto row = tm.league_rank();
-              hbv_type hbv( tm, len, ( row + 1 ) * 1000 );
+              hbv_type hbv( tm, len, ( row + 1 ) * 1000, part );
               auto e_idx = row_map( row );
               auto e_end = row_map( row + 1 );
 
-              hbv.clear_l1( tm );
-              hbv.clear_l2( tm );
+              hbv.clear_l1( tm, part );
+              hbv.clear_l2( tm, part );
 
               Kokkos::parallel_for(
                   Kokkos::TeamThreadRange( tm, e_idx / 2, e_end / 2 ),
@@ -744,7 +749,7 @@ TEMPLATE_SCENARIO_SIG(
                     auto j = jj * 2;
                     auto s = e( j );
                     auto f = e( j + 1 );
-                    hbv.set( tm, s, f, TeamSequentialPartition{} );
+                    hbv.set( tm, s, f, part );
                   } );
 
               tm.team_barrier();
@@ -820,8 +825,9 @@ TEMPLATE_SCENARIO_SIG(
     size_type nrows = 12;
 
     // Allocating space required for hbitvector
+    HBVAccessLevel< TeamLevel > team_level;
     auto policy = policy_type( nrows, Kokkos::AUTO );
-    hbv_type::set_scratch_size( policy, len );
+    hbv_type::set_scratch_size( policy, len, team_level );
 
     WHEN( "L1 region is cleared completely" )
     {
@@ -835,7 +841,7 @@ TEMPLATE_SCENARIO_SIG(
           "diverg::test_hbitvector::clear_l1", policy,
           KOKKOS_LAMBDA ( const member_type& tm ) {
             auto row = tm.league_rank();
-            auto hbv = hbv_type( tm, len, row * 1000 );
+            auto hbv = hbv_type( tm, len, row * 1000, team_level );
 
             Kokkos::parallel_for(
                 Kokkos::TeamThreadRange( tm, hbv.num_bitsets() ),
@@ -843,7 +849,7 @@ TEMPLATE_SCENARIO_SIG(
                   hbv( i ) = hbv_type::BITSET_ALL_SET;
                 } );
 
-            hbv.clear_l1( tm );
+            hbv.clear_l1( tm, team_level );
             auto begin = hbv.l1_begin_bindex();
             auto end = begin + hbv.l1_num_bitsets();
             Kokkos::parallel_for( Kokkos::TeamThreadRange( tm, hbv.num_bitsets() ),
@@ -876,7 +882,7 @@ TEMPLATE_SCENARIO_SIG(
           "diverg::test_hbitvector::clear_l2_all", policy,
           KOKKOS_LAMBDA ( const member_type& tm ) {
             auto row = tm.league_rank();
-            auto hbv = hbv_type( tm, len, row * 1000 );
+            auto hbv = hbv_type( tm, len, row * 1000, team_level );
 
             Kokkos::parallel_for(
                 Kokkos::TeamThreadRange( tm, hbv.num_bitsets() ),
@@ -884,7 +890,7 @@ TEMPLATE_SCENARIO_SIG(
                   hbv( i ) = hbv_type::BITSET_ALL_SET;
                 } );
 
-            hbv.clear_l2( tm );
+            hbv.clear_l2( tm, team_level );
             auto begin = hbv.l1_begin_bindex();
             auto end = begin + hbv.l1_num_bitsets();
             Kokkos::parallel_for( Kokkos::TeamThreadRange( tm, hbv.num_bitsets() ),
@@ -918,7 +924,7 @@ TEMPLATE_SCENARIO_SIG(
           "diverg::test_hbitvector::clear_l2_lbidx", policy,
           KOKKOS_LAMBDA ( const member_type& tm ) {
             auto row = tm.league_rank();
-            auto hbv = hbv_type( tm, len, row * 1000 );
+            auto hbv = hbv_type( tm, len, row * 1000, team_level );
 
             Kokkos::parallel_for(
                 Kokkos::TeamThreadRange( tm, hbv.num_bitsets() ),
@@ -927,7 +933,7 @@ TEMPLATE_SCENARIO_SIG(
                 } );
 
             auto lb_bidx = ( hbv.l2_num_bitsets() - clen ) / 2;
-            hbv.clear_l2( tm, lb_bidx, lb_bidx + clen );
+            hbv.clear_l2( tm, lb_bidx, lb_bidx + clen, team_level );
             auto begin = lb_bidx + hbv.l1_begin_bindex() + hbv.l1_num_bitsets();
             if ( begin >= hbv.num_bitsets() ) begin -= hbv.num_bitsets();
             auto end = begin + clen;
@@ -973,7 +979,7 @@ TEMPLATE_SCENARIO_SIG(
           "diverg::test_hbitvector::clear_l2_bidx", policy,
           KOKKOS_LAMBDA ( const member_type& tm ) {
             auto row = tm.league_rank();
-            auto hbv = hbv_type( tm, len, row * 1000 );
+            auto hbv = hbv_type( tm, len, row * 1000, team_level );
 
             Kokkos::parallel_for(
                 Kokkos::TeamThreadRange( tm, hbv.num_bitsets() ),
@@ -993,7 +999,7 @@ TEMPLATE_SCENARIO_SIG(
 
             begin += ( space_len - clen ) / 2;
             auto end = begin + clen;
-            hbv.clear_l2_by_bidx( tm, begin, end );
+            hbv.clear_l2_by_bidx( tm, begin, end, team_level );
 
             Kokkos::parallel_for(
                 Kokkos::TeamThreadRange( tm, hbv.num_bitsets() ),
@@ -1029,7 +1035,7 @@ TEMPLATE_SCENARIO_SIG(
           "diverg::test_hbitvector::clear_l2_idx", policy,
           KOKKOS_LAMBDA ( const member_type& tm ) {
             auto row = tm.league_rank();
-            auto hbv = hbv_type( tm, len, row * 1000 );
+            auto hbv = hbv_type( tm, len, row * 1000, team_level );
 
             Kokkos::parallel_for(
                 Kokkos::TeamThreadRange( tm, hbv.num_bitsets() ),
@@ -1050,7 +1056,7 @@ TEMPLATE_SCENARIO_SIG(
             begin += ( space_len - clen ) / 2;
             auto end = begin + clen;
             hbv.clear_l2_by_idx( tm, hbv_type::start_index( begin ) + s_offset,
-                                 hbv_type::start_index( end ) + e_offset );
+                                 hbv_type::start_index( end ) + e_offset, team_level );
 
             Kokkos::parallel_for(
                 Kokkos::TeamThreadRange( tm, hbv.num_bitsets() ),
@@ -1085,7 +1091,7 @@ TEMPLATE_SCENARIO_SIG(
           "diverg::test_hbitvector::clear_l2_idx", policy,
           KOKKOS_LAMBDA ( const member_type& tm ) {
             auto row = tm.league_rank();
-            auto hbv = hbv_type( tm, len, row * 1000 );
+            auto hbv = hbv_type( tm, len, row * 1000, team_level );
 
             Kokkos::parallel_for(
                 Kokkos::TeamThreadRange( tm, hbv.num_bitsets() ),
@@ -1106,7 +1112,7 @@ TEMPLATE_SCENARIO_SIG(
             begin += ( space_len - clen ) / 2;
             auto end = begin + clen;
             hbv.clear_l2_by_idx( tm, hbv_type::start_index( begin ) + s_offset,
-                                 hbv_type::start_index( end ) /* no offset */);
+                                 hbv_type::start_index( end ) /* no offset */, team_level );
 
             Kokkos::parallel_for(
                 Kokkos::TeamThreadRange( tm, hbv.num_bitsets() ),

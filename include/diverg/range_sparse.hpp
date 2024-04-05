@@ -1112,7 +1112,7 @@ namespace diverg {
     auto vector_size = grid.vector_size();  // or hbv_type::l1_num_bitsets();
     auto team_size = grid.team_size();
     auto policy = policy_type( a_nrows, team_size, vector_size );
-    hbv_type::set_scratch_size( policy, b_ncols );
+    hbv_type::set_scratch_size( policy, b_ncols, part );
 
     Kokkos::parallel_for(
         "diverg::crs_matrix::range_spgemm_symbolic::count_row_nnz", policy,
@@ -1120,14 +1120,14 @@ namespace diverg {
           auto row = tm.league_rank();
           auto a_idx = a_rowmap( row );
           auto a_end = a_rowmap( row + 1 );
-          hbv_type hbv( tm, b_ncols, row );
+          hbv_type hbv( tm, b_ncols, row, part );
           // min entry (bitset aligned) in the current `row` in C
           ordinal_type c_min = hbv.l1_begin_idx();
           // max entry + 1 (bitset aligned) in the current `row` in C
           ordinal_type c_max = c_min + hbv.l1_size();
 
           // Setting all L1 bitsets in `h_bv` to zero
-          hbv.clear_l1( tm );
+          hbv.clear_l1( tm, part );
 
           for ( ; a_idx != a_end; a_idx += 2 ) {
             auto b_row = a_entries( a_idx );
@@ -1144,7 +1144,7 @@ namespace diverg {
               // implies that the extended range is definitely in L2.
               if ( b_min < c_min ) {
                 b_min = hbv_type::aligned_index( b_min );
-                hbv.clear_l2_by_idx( tm, b_min, c_min );
+                hbv.clear_l2_by_idx( tm, b_min, c_min, part );
                 c_min = b_min;  // update c_min
               }
               auto b_max = b_entries( b_end - 1 ) + 1;
@@ -1152,7 +1152,7 @@ namespace diverg {
               // implies that the extended range is definitely in L2.
               if ( c_max < b_max ) {
                 b_max = hbv_type::aligned_index_ceil( b_max );
-                hbv.clear_l2_by_idx( tm, c_max, b_max );
+                hbv.clear_l2_by_idx( tm, c_max, b_max, part );
                 c_max = b_max;  // update c_max
               }
 
@@ -1252,7 +1252,7 @@ namespace diverg {
     auto vector_size = grid.vector_size();  // or hbv_type::l1_num_bitsets();
     auto team_size = grid.team_size();
     auto policy = policy_type( a_nrows, team_size, vector_size );
-    hbv_type::set_scratch_size( policy, b_ncols );
+    hbv_type::set_scratch_size( policy, b_ncols, part );
 
     Kokkos::parallel_for(
         "diverg::crs_matrix::range_spgemm_numeric::accumulate_hbv", policy,
@@ -1260,14 +1260,14 @@ namespace diverg {
           auto row = tm.league_rank();
           auto a_idx = a_rowmap( row );
           auto a_end = a_rowmap( row + 1 );
-          hbv_type hbv( tm, b_ncols, row );
+          hbv_type hbv( tm, b_ncols, row, part );
           // min entry (bitset aligned) in the current `row` in C
           ordinal_type c_min = hbv.l1_begin_idx();
           // max entry + 1 (bitset aligned) in the current `row` in C
           ordinal_type c_max = c_min + hbv.l1_size();
 
           // Setting all L1 bitsets in `h_bv` to zero
-          hbv.clear_l1( tm );
+          hbv.clear_l1( tm, part );
 
           for ( ; a_idx != a_end; a_idx += 2 ) {
             auto b_row = a_entries( a_idx );
@@ -1284,7 +1284,7 @@ namespace diverg {
               // implies that the extended range is definitely in L2.
               if ( b_min < c_min ) {
                 b_min = hbv_type::aligned_index( b_min );
-                hbv.clear_l2_by_idx( tm, b_min, c_min );
+                hbv.clear_l2_by_idx( tm, b_min, c_min, part );
                 c_min = b_min;  // update c_min
               }
               auto b_max = b_entries( b_end - 1 ) + 1;
@@ -1292,7 +1292,7 @@ namespace diverg {
               // implies that the extended range is definitely in L2.
               if ( c_max < b_max ) {
                 b_max = hbv_type::aligned_index_ceil( b_max );
-                hbv.clear_l2_by_idx( tm, c_max, b_max );
+                hbv.clear_l2_by_idx( tm, c_max, b_max, part );
                 c_max = b_max;  // update c_max
               }
 
@@ -1406,7 +1406,7 @@ namespace diverg {
     auto vector_size = grid.vector_size();  // or hbv_type::l1_num_bitsets();
     auto team_size = grid.team_size();
     auto policy = policy_type( a_nrows, team_size, vector_size );
-    hbv_type::set_scratch_size( policy, b_ncols );
+    hbv_type::set_scratch_size( policy, b_ncols, part );
 
     Kokkos::parallel_for(
         "diverg::crs_matrix::range_spgemm_symbolic::count_row_nnz", policy,
@@ -1414,15 +1414,15 @@ namespace diverg {
           auto row = tm.league_rank();
           auto a_idx = a_rowmap( row );
           auto a_end = a_rowmap( row + 1 );
-          hbv_type hbv( tm, b_ncols, row );
+          hbv_type hbv( tm, b_ncols, row, part );
           // min entry (bitset aligned) in the current `row` in C
           ordinal_type c_min;
           // max entry + 1 (bitset aligned) in the current `row` in C
           ordinal_type c_max;
 
           // Setting all L1 bitsets in `h_bv` to zero
-          hbv.clear_l1( tm );
-          hbv.clear_l2( tm );
+          hbv.clear_l1( tm, part );
+          hbv.clear_l2( tm, part );
 
           tm.team_barrier();
 
@@ -1545,7 +1545,7 @@ namespace diverg {
     auto vector_size = grid.vector_size();  // or hbv_type::l1_num_bitsets();
     auto team_size = grid.team_size();
     auto policy = policy_type( a_nrows, team_size, vector_size );
-    hbv_type::set_scratch_size( policy, b_ncols );
+    hbv_type::set_scratch_size( policy, b_ncols, part );
 
     Kokkos::parallel_for(
         "diverg::crs_matrix::range_spgemm_numeric::accumulate_hbv", policy,
@@ -1553,15 +1553,15 @@ namespace diverg {
           auto row = tm.league_rank();
           auto a_idx = a_rowmap( row );
           auto a_end = a_rowmap( row + 1 );
-          hbv_type hbv( tm, b_ncols, row );
+          hbv_type hbv( tm, b_ncols, row, part );
           // min entry (bitset aligned) in the current `row` in C
           ordinal_type c_min;
           // max entry + 1 (bitset aligned) in the current `row` in C
           ordinal_type c_max;
 
           // Setting all L1 bitsets in `h_bv` to zero
-          hbv.clear_l1( tm );
-          hbv.clear_l2( tm );
+          hbv.clear_l1( tm, part );
+          hbv.clear_l2( tm, part );
 
           tm.team_barrier();
 
@@ -1698,7 +1698,7 @@ namespace diverg {
     auto vector_size = grid.vector_size();  // or hbv_type::l1_num_bitsets();
     auto team_size = grid.team_size();
     auto policy = policy_type( a_nrows, team_size, vector_size );
-    hbv_type::set_scratch_size( policy, b_ncols );
+    hbv_type::set_scratch_size( policy, b_ncols, part );
 
     Kokkos::parallel_for(
         "diverg::crs_matrix::range_spgemm_symbolic::count_row_nnz", policy,
@@ -1706,15 +1706,15 @@ namespace diverg {
           auto row = tm.league_rank();
           auto a_idx = a_rowmap( row );
           auto a_end = a_rowmap( row + 1 );
-          hbv_type hbv( tm, b_ncols, row );
+          hbv_type hbv( tm, b_ncols, row, part );
           // min entry (bitset aligned) in the current `row` in C
           ordinal_type c_min = Kokkos::Experimental::finite_max< ordinal_type >::value;
           // max entry + 1 (bitset aligned) in the current `row` in C
           ordinal_type c_max = Kokkos::Experimental::finite_min< ordinal_type >::value;
 
           // Setting all L1 bitsets in `h_bv` to zero
-          hbv.clear_l1( tm );
-          hbv.clear_l2( tm );
+          hbv.clear_l1( tm, part );
+          hbv.clear_l2( tm, part );
 
           tm.team_barrier();
 
@@ -1841,7 +1841,7 @@ namespace diverg {
     auto vector_size = grid.vector_size();  // or hbv_type::l1_num_bitsets();
     auto team_size = grid.team_size();
     auto policy = policy_type( a_nrows, team_size, vector_size );
-    hbv_type::set_scratch_size( policy, b_ncols );
+    hbv_type::set_scratch_size( policy, b_ncols, part );
 
     Kokkos::parallel_for(
         "diverg::crs_matrix::range_spgemm_numeric::accumulate_hbv", policy,
@@ -1849,15 +1849,15 @@ namespace diverg {
           auto row = tm.league_rank();
           auto a_idx = a_rowmap( row );
           auto a_end = a_rowmap( row + 1 );
-          hbv_type hbv( tm, b_ncols, row );
+          hbv_type hbv( tm, b_ncols, row, part );
           // min entry (bitset aligned) in the current `row` in C
           ordinal_type c_min = Kokkos::Experimental::finite_max< ordinal_type >::value;
           // max entry + 1 (bitset aligned) in the current `row` in C
           ordinal_type c_max = Kokkos::Experimental::finite_min< ordinal_type >::value;
 
           // Setting all L1 bitsets in `h_bv` to zero
-          hbv.clear_l1( tm );
-          hbv.clear_l2( tm );
+          hbv.clear_l1( tm, part );
+          hbv.clear_l2( tm, part );
 
           tm.team_barrier();
 

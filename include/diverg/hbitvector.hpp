@@ -69,6 +69,29 @@ namespace diverg {
   template< typename TPartition >
   using GetHBVThreadAccessType = typename GetHBVThreadAccess< TPartition >::type;
 
+  struct TeamLevel {};
+  struct ThreadLevel {};
+  struct VectorLevel {};
+
+  template< typename TSpec >
+  struct HBVAccessLevel {};
+
+  template< typename TPartition >
+  struct GetHBVAccessLevel;
+
+  template< typename TSpec >
+  struct GetHBVAccessLevel< ExecPartition< TSpec > > {
+    using type = HBVAccessLevel< TeamLevel >;
+  };
+
+  template<>
+  struct GetHBVAccessLevel< ThreadSequentialPartition > {
+    using type = HBVAccessLevel< ThreadLevel >;
+  };
+
+  template< typename TPartition >
+  using GetHBVAccessLevelType = typename GetHBVAccessLevel< TPartition >::type;
+
   /**
    *  @brief  Hierarchical (two-level) bit vector
    *
@@ -130,15 +153,83 @@ namespace diverg {
       size_type l1_begin;       //!< Index of the first bit reside in L1 (inclusive)
       view_type l1_data;        //!< First level bit vector view
       view_type l2_data;        //!< Second level bit vector view
-      /* === LIFECYCLE === */
+    private:
       KOKKOS_FUNCTION
-      HBitVector( const member_type& tm, size_type n, size_type centre )
-        : /*m_size( n ),*/ l1_begin( 0 ), l1_data( ), l2_data( )
+      HBitVector( const member_type& tm, size_type n )
+          : /*m_size( n ),*/ l1_begin_bidx( 0 ), l1_begin( 0 ),
+            l1_data(), l2_data()
       {
-        assert( centre < n );
-
         this->m_x_size = HBitVector::aligned_size( n );
         this->m_num_bitsets = HBitVector::bindex( this->m_x_size );
+      }
+
+      KOKKOS_INLINE_FUNCTION void
+      allocate_data( const member_type& tm, size_type n,
+                     HBVAccessLevel< TeamLevel > )
+      {
+        auto l1size = HBitVector::l1_scratch_size();
+        this->l1_data = ( view_type )
+          ( tm.team_scratch( 0 ).get_shmem_aligned( l1size, space_alignment ) );
+        auto l2size = this->l2_scratch_size();
+        if ( l2size != 0 ) {
+          this->l2_data = ( view_type )
+            ( tm.team_scratch( 1 ).get_shmem_aligned( l2size, space_alignment ) );
+        }
+      }
+
+      KOKKOS_INLINE_FUNCTION void
+      allocate_data( const member_type& tm, size_type n,
+                     HBVAccessLevel< ThreadLevel > )
+      {
+        auto l1size = HBitVector::l1_scratch_size();
+        this->l1_data = ( view_type )
+          ( tm.thread_scratch( 0 ).get_shmem_aligned( l1size, space_alignment ) );
+        auto l2size = this->l2_scratch_size();
+        if ( l2size != 0 ) {
+          this->l2_data = ( view_type )
+            ( tm.thread_scratch( 1 ).get_shmem_aligned( l2size, space_alignment ) );
+        }
+      }
+    public:
+      /* === LIFECYCLE === */
+      template< typename TSpec >
+      KOKKOS_FUNCTION
+      HBitVector( const member_type& tm, size_type n, size_type centre,
+                  HBVAccessLevel< TSpec > access_level_tag )
+          : HBitVector( tm, n )
+      {
+        this->allocate_data( tm, n, access_level_tag );
+        this->set_l1_position( centre );
+      }
+
+      template< typename TSpec >
+      KOKKOS_FUNCTION
+      HBitVector( const member_type& tm, size_type n,
+                  HBVAccessLevel< TSpec > access_level_tag )
+          : HBitVector( tm, n )
+      {
+        this->allocate_data( tm, n, access_level_tag );
+      }
+
+      template< typename TSpec >
+      KOKKOS_FUNCTION
+      HBitVector( const member_type& tm, size_type n, size_type centre,
+                  ExecPartition< TSpec > )
+          : HBitVector( tm, n,
+                        GetHBVAccessLevelType< ExecPartition< TSpec > >{} )
+      { }
+
+      template< typename TSpec >
+      KOKKOS_FUNCTION
+      HBitVector( const member_type& tm, size_type n, ExecPartition< TSpec > )
+          : HBitVector( tm, n,
+                        GetHBVAccessLevelType< ExecPartition< TSpec > >{} )
+      { }
+
+      KOKKOS_INLINE_FUNCTION void
+      set_l1_position( size_type centre )
+      {
+        assert( centre < this->m_x_size );
         auto ctr_bidx = HBitVector::bindex( centre );
         // The begin index is set such that the L1 range would be (inclusive):
         //   [ctr_bidx-(L1_NUM_BITSETS/2)+1...ctr_bidx+(L1_NUM_BITSETS/2)]
@@ -155,15 +246,6 @@ namespace diverg {
         else {
           this->l1_begin_bidx = 0;
           this->l1_begin = 0;
-        }
-
-        auto l1size = HBitVector::l1_scratch_size();
-        this->l1_data = ( view_type )
-          ( tm.team_scratch( 0 ).get_shmem_aligned( l1size, space_alignment ) );
-        auto l2size = this->l2_scratch_size();
-        if ( l2size != 0 ) {
-          this->l2_data = ( view_type )
-            ( tm.team_scratch( 1 ).get_shmem_aligned( l2size, space_alignment ) );
         }
       }
       /* === STATIC MEMBERS === */
@@ -229,7 +311,7 @@ namespace diverg {
         return ( idx + ( BITSET_WIDTH - 1 ) ) & ( INDEX_ALIGN_MASK );
       }
 
-      static inline size_type
+      static KOKKOS_INLINE_FUNCTION size_type
       space_aligned_size( size_type n ) noexcept
       {
         // 0x00000007 if `space_alignment==8` and `size_type=uint32_t`
@@ -353,14 +435,40 @@ namespace diverg {
 
       template< typename TPolicy >
       static inline TPolicy
-      set_scratch_size( TPolicy& policy, size_type n )
+      set_scratch_size( TPolicy& policy, size_type n,
+                        HBVAccessLevel< TeamLevel > )
       {
         auto l1size = HBitVector::l1_scratch_size();
         auto l2size_aln = HBitVector::space_aligned_size(
             HBitVector::l2_scratch_size( n ) );
         policy.set_scratch_size( 0, Kokkos::PerTeam( l1size ) );
-        if ( l2size_aln != 0 ) policy.set_scratch_size( 1, Kokkos::PerTeam( l2size_aln ) );
+        if ( l2size_aln != 0 ) {
+          policy.set_scratch_size( 1, Kokkos::PerTeam( l2size_aln ) );
+        }
         return policy;
+      }
+
+      template< typename TPolicy >
+      static inline TPolicy
+      set_scratch_size( TPolicy& policy, size_type n,
+                        HBVAccessLevel< ThreadLevel > )
+      {
+        auto l1size = HBitVector::l1_scratch_size();
+        auto l2size_aln = HBitVector::space_aligned_size(
+            HBitVector::l2_scratch_size( n ) );
+        policy.set_scratch_size( 0, Kokkos::PerThread( l1size ) );
+        if ( l2size_aln != 0 ) {
+          policy.set_scratch_size( 1, Kokkos::PerThread( l2size_aln ) );
+        }
+        return policy;
+      }
+
+      template< typename TPolicy, typename TSpec >
+      static inline TPolicy
+      set_scratch_size( TPolicy& policy, size_type n, ExecPartition< TSpec > )
+      {
+        return HBitVector::set_scratch_size(
+            policy, n, GetHBVAccessLevelType< ExecPartition< TSpec > >{} );
       }
 
       static KOKKOS_INLINE_FUNCTION size_type
@@ -586,10 +694,10 @@ namespace diverg {
       }
 
       /**
-       *   @brief Zero all bitsets in L1
+       *   @brief Zero all bitsets in L1 (team-level)
        */
       KOKKOS_INLINE_FUNCTION void
-      clear_l1( const member_type& tm ) noexcept
+      clear_l1( const member_type& tm, HBVAccessLevel< TeamLevel > ) noexcept
       {
         Kokkos::parallel_for(
             Kokkos::TeamVectorRange( tm, HBitVector::l1_num_bitsets() ),
@@ -597,10 +705,31 @@ namespace diverg {
       }
 
       /**
-       *   @brief Zero all bitsets in L2
+       *   @brief Zero all bitsets in L1 (thread-level)
        */
       KOKKOS_INLINE_FUNCTION void
-      clear_l2( const member_type& tm ) noexcept
+      clear_l1( const member_type& tm, HBVAccessLevel< ThreadLevel > ) noexcept
+      {
+        Kokkos::parallel_for(
+            Kokkos::ThreadVectorRange( tm, HBitVector::l1_num_bitsets() ),
+            [=]( const uint64_t j ) { this->l1_data[ j ] = 0; } );
+      }
+
+      /**
+       *   @brief Zero all bitsets in L1 (auto-detect by partition)
+       */
+      template< typename TSpec >
+      KOKKOS_INLINE_FUNCTION void
+      clear_l1( const member_type& tm, ExecPartition< TSpec > ) noexcept
+      {
+        this->clear_l1( tm, GetHBVAccessLevelType< ExecPartition< TSpec > >{} );
+      }
+
+      /**
+       *   @brief Zero all bitsets in L2 (team-level)
+       */
+      KOKKOS_INLINE_FUNCTION void
+      clear_l2( const member_type& tm, HBVAccessLevel< TeamLevel > ) noexcept
       {
         Kokkos::parallel_for(
             Kokkos::TeamVectorRange( tm, this->l2_num_bitsets() ),
@@ -608,7 +737,28 @@ namespace diverg {
       }
 
       /**
-       *   @brief Zero range of bitsets [ls_bidx, lf_bidx) on L2
+       *   @brief Zero all bitsets in L2 (thread-level)
+       */
+      KOKKOS_INLINE_FUNCTION void
+      clear_l2( const member_type& tm, HBVAccessLevel< ThreadLevel > ) noexcept
+      {
+        Kokkos::parallel_for(
+            Kokkos::ThreadVectorRange( tm, this->l2_num_bitsets() ),
+            [=]( const uint64_t j ) { this->l2_data[ j ] = 0; } );
+      }
+
+      /**
+       *   @brief Zero all bitsets in L2 (auto-detect by partition)
+       */
+      template< typename TSpec >
+      KOKKOS_INLINE_FUNCTION void
+      clear_l2( const member_type& tm, ExecPartition< TSpec > ) noexcept
+      {
+        this->clear_l2( tm, GetHBVAccessLevelType< ExecPartition< TSpec > >{} );
+      }
+
+      /**
+       *   @brief Zero range of bitsets [ls_bidx, lf_bidx) on L2 (team-level)
        *
        *   @param tm  Team Policy member
        *   @param ls_bidx Local bitset index on L2 (inclusive)
@@ -620,7 +770,7 @@ namespace diverg {
        */
       KOKKOS_INLINE_FUNCTION void
       clear_l2( const member_type& tm, size_type ls_bidx,
-                size_type lf_bidx ) noexcept
+                size_type lf_bidx, HBVAccessLevel< TeamLevel > ) noexcept
       {
         Kokkos::parallel_for(
             Kokkos::TeamVectorRange( tm, ls_bidx, lf_bidx ),
@@ -628,7 +778,33 @@ namespace diverg {
       }
 
       /**
+       *   @brief Zero range of bitsets [ls_bidx, lf_bidx) on L2 (thread-level)
+       */
+      KOKKOS_INLINE_FUNCTION void
+      clear_l2( const member_type& tm, size_type ls_bidx,
+                size_type lf_bidx, HBVAccessLevel< ThreadLevel > ) noexcept
+      {
+        Kokkos::parallel_for(
+            Kokkos::ThreadVectorRange( tm, ls_bidx, lf_bidx ),
+            [=]( const uint64_t j ) { this->l2_data[ j ] = 0; } );
+      }
+
+      /**
+       *   @brief Zero range of bitsets [ls_bidx, lf_bidx) on L2
+       *          (auto-detect by partition)
+       */
+      template< typename TSpec >
+      KOKKOS_INLINE_FUNCTION void
+      clear_l2( const member_type& tm, size_type ls_bidx,
+                size_type lf_bidx, ExecPartition< TSpec > ) noexcept
+      {
+        this->clear_l2( tm, ls_bidx, lf_bidx,
+                        GetHBVAccessLevelType< ExecPartition< TSpec > >{} );
+      }
+
+      /**
        *   @brief Zero range of bitsets [s_bidx, f_bidx) which occurs on L2
+       *          (team-level)
        *
        *   @param tm  Team Policy member
        *   @param s_bidx Global bitset index (inclusive)
@@ -640,7 +816,7 @@ namespace diverg {
        */
       KOKKOS_INLINE_FUNCTION void
       clear_l2_by_bidx( const member_type& tm, size_type s_bidx,
-                        size_type f_bidx ) noexcept
+                        size_type f_bidx, HBVAccessLevel< TeamLevel > ) noexcept
       {
         assert( f_bidx != 0 );
 
@@ -654,7 +830,40 @@ namespace diverg {
       }
 
       /**
+       *   @brief Zero range of bitsets [s_bidx, f_bidx) which occurs on L2
+       *          (thread-level)
+       */
+      KOKKOS_INLINE_FUNCTION void
+      clear_l2_by_bidx( const member_type& tm, size_type s_bidx,
+                        size_type f_bidx, HBVAccessLevel< ThreadLevel > ) noexcept
+      {
+        assert( f_bidx != 0 );
+
+        auto rs_bidx = this->relative_bitset( s_bidx );
+        auto rf_bidx = this->relative_bitset( f_bidx - 1 ) + 1;
+        auto ls_bidx = rs_bidx - HBitVector::l1_num_bitsets();
+        auto lf_bidx = rf_bidx - HBitVector::l1_num_bitsets();
+        Kokkos::parallel_for(
+            Kokkos::ThreadVectorRange( tm, ls_bidx, lf_bidx ),
+            [=]( const uint64_t j ) { this->l2_data[ j ] = 0; } );
+      }
+
+      /**
+       *   @brief Zero range of bitsets [s_bidx, f_bidx) which occurs on L2
+       *          (auto-detect by partition)
+       */
+      template< typename TSpec >
+      KOKKOS_INLINE_FUNCTION void
+      clear_l2_by_bidx( const member_type& tm, size_type s_bidx,
+                        size_type f_bidx, ExecPartition< TSpec > ) noexcept
+      {
+        this->clear_l2_by_bidx( tm, s_bidx, f_bidx,
+                                GetHBVAccessLevelType< ExecPartition< TSpec > >{} );
+      }
+
+      /**
        *   @brief Zero range of bitsets on L2 covering bit range [s_idx, f_idx)
+       *          (team-level)
        *
        *   @param tm  Team Policy member
        *   @param s_idx Global bit index in the vector (inclusive)
@@ -669,7 +878,7 @@ namespace diverg {
        */
       KOKKOS_INLINE_FUNCTION void
       clear_l2_by_idx( const member_type& tm, size_type s_idx,
-                       size_type f_idx ) noexcept
+                       size_type f_idx, HBVAccessLevel< TeamLevel > ) noexcept
       {
         assert( f_idx != 0 );
 
@@ -688,6 +897,46 @@ namespace diverg {
         Kokkos::parallel_for(
             Kokkos::TeamVectorRange( tm, ls_bidx, lf_bidx ),
             [=]( const uint64_t j ) { this->l2_data[ j ] = 0; } );
+      }
+
+      /**
+       *   @brief Zero range of bitsets on L2 covering bit range [s_idx, f_idx)
+       *          (thread-level)
+       */
+      KOKKOS_INLINE_FUNCTION void
+      clear_l2_by_idx( const member_type& tm, size_type s_idx,
+                       size_type f_idx, HBVAccessLevel< ThreadLevel > ) noexcept
+      {
+        assert( f_idx != 0 );
+
+        auto rs_idx = this->relative_idx( s_idx );
+        // `f_idx` can be equal to L1 begin index which would be mapped to 0
+        // instead of |L1|+|L2| when computing the relative index.
+        // `rel( f_idx - 1 ) + 1` gives the right answer without branching. The
+        // following line combines this trick with computing the aligned index
+        // ceiling method.
+        auto rf_idx = ( this->relative_idx( f_idx - 1 ) + BITSET_WIDTH )
+                      & ( INDEX_ALIGN_MASK );
+        auto ls_idx = rs_idx - HBitVector::l1_size();
+        auto lf_idx = rf_idx - HBitVector::l1_size();
+        auto ls_bidx = HBitVector::bindex( ls_idx );
+        auto lf_bidx = HBitVector::bindex( lf_idx );
+        Kokkos::parallel_for(
+            Kokkos::ThreadVectorRange( tm, ls_bidx, lf_bidx ),
+            [=]( const uint64_t j ) { this->l2_data[ j ] = 0; } );
+      }
+
+      /**
+       *   @brief Zero range of bitsets on L2 covering bit range [s_idx, f_idx)
+       *          (auto-detect by partition)
+       */
+      template< typename TSpec >
+      KOKKOS_INLINE_FUNCTION void
+      clear_l2_by_idx( const member_type& tm, size_type s_idx,
+                       size_type f_idx, ExecPartition< TSpec > ) noexcept
+      {
+        this->clear_l2_by_idx( tm, s_idx, f_idx,
+                               GetHBVAccessLevelType< ExecPartition< TSpec > >{} );
       }
 
       /**
@@ -937,7 +1186,7 @@ namespace diverg {
 
       KOKKOS_INLINE_FUNCTION void
       _set( const member_type& tm, size_type s_idx, size_type f_idx,
-            HBVThreadAccess< UnsafeAtBoundaries > tac )
+            HBVAccessLevel< VectorLevel >, HBVThreadAccess< UnsafeAtBoundaries > tac )
       {
         assert( s_idx <= f_idx );
         assert( f_idx < this->m_x_size );
