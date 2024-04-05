@@ -486,6 +486,7 @@ TEMPLATE_SCENARIO_SIG( "Validation and verification of range SpGEMM", "[range_sp
       TAccumulator, TPartition, TSpec, TScalar, TOrdinal, TSize, N, NNZ ),
     ( ( BTreeAccumulator ), ThreadRangePartition, ( crs_matrix::RangeDynamic ), char, int32_t, uint64_t, 6521, 200000 ),
     ( ( HBitVectorAccumulator<> ), TeamSequentialPartition, ( crs_matrix::RangeDynamic ), char, int32_t, uint64_t, 6521, 200000 ),
+    ( ( HBitVectorAccumulator<> ), ThreadRangeParallelPartition, ( crs_matrix::RangeDynamic ), char, int32_t, uint64_t, 6521, 200000 ),
     ( ( HBitVectorAccumulator<> ), ThreadParallelPartition, ( crs_matrix::RangeDynamic ), char, int32_t, uint64_t, 6521, 200000 ) )
 {
   typedef SparseConfig< grid::Auto, TAccumulator, TPartition > config_type;
@@ -540,6 +541,7 @@ TEMPLATE_SCENARIO_SIG( "Validation and verification of range power", "[range_spa
       TAccumulator, TPartition, TSpec, TScalar, TOrdinal, TSize, N, NNZ, K ),
     ( ( BTreeAccumulator ), ThreadRangePartition, ( crs_matrix::RangeDynamic ), char, int32_t, uint64_t, 6521, 4000, 100 ),
     ( ( HBitVectorAccumulator<> ), TeamSequentialPartition, ( crs_matrix::RangeDynamic ), char, int32_t, uint64_t, 6521, 4000, 100 ),
+    ( ( HBitVectorAccumulator<> ), ThreadRangeParallelPartition, ( crs_matrix::RangeDynamic ), char, int32_t, uint64_t, 6521, 4000, 100 ),
     ( ( HBitVectorAccumulator<> ), ThreadParallelPartition, ( crs_matrix::RangeDynamic ), char, int32_t, uint64_t, 6521, 4000, 100 ) )
 {
   typedef SparseConfig< grid::Auto, TAccumulator, TPartition > config_type;
