@@ -62,6 +62,11 @@ namespace diverg {
   };
 
   template<>
+  struct GetHBVThreadAccess< ThreadSequentialPartition > {
+    using type = HBVThreadAccess< Safe >;
+  };
+
+  template<>
   struct GetHBVThreadAccess< TeamSequentialPartition > {
     using type = HBVThreadAccess< UnsafeAtBoundaries >;
   };
@@ -998,6 +1003,92 @@ namespace diverg {
       set( size_type idx, ExecPartition< TSpec > ) noexcept
       {
         this->set( idx, GetHBVThreadAccessType< ExecPartition< TSpec > >{} );
+      }
+
+      /**
+       *   @brief Set a range of bits in the vector with Safe access
+       *          (e.g. in ThreadSequentialPartition)
+       *
+       *   NOTE: The function should be called by a team to be run by a single
+       *         thread (vector parallelism).
+       */
+      KOKKOS_INLINE_FUNCTION void
+      set( const member_type& tm, size_type s_idx, size_type f_idx,
+            HBVThreadAccess< Safe > tag ) noexcept
+      {
+        assert( s_idx <= f_idx );
+        assert( f_idx < this->m_x_size );
+
+        if ( s_idx == f_idx ) {
+          Kokkos::single( Kokkos::PerThread( tm ), [=]() {
+            this->set( s_idx, tag );
+          } );
+          return;
+        }
+
+        auto rs_idx = this->relative_idx( s_idx );
+        auto rf_idx = this->relative_idx( f_idx );
+
+        auto setbits =
+          [&tm]( auto data_ptr, auto ls_idx, auto lf_idx ) {
+            auto ls_bidx = HBitVector::bindex( ls_idx );
+            auto lf_bidx = HBitVector::bindex( lf_idx );
+
+            if ( ls_bidx != lf_bidx ) {
+              Kokkos::single( Kokkos::PerThread( tm ), [=]() {
+                auto s_offset = HBitVector::boffset( ls_idx );
+                auto mask = ( BITSET_ALL_SET << s_offset );
+                data_ptr[ ls_bidx ] |= mask;
+              } );
+
+              Kokkos::parallel_for(
+                  Kokkos::ThreadVectorRange( tm, ls_bidx + 1, lf_bidx ),
+                  [=]( const uint64_t k ) {
+                    data_ptr[ k ] |= BITSET_ALL_SET;
+                  } );
+
+              Kokkos::single( Kokkos::PerThread( tm ), [=]() {
+                auto f_offset = HBitVector::boffset( lf_idx );
+                auto mask = ( BITSET_ALL_SET >> ( BITSET_WIDTH - 1u - f_offset ) );
+                data_ptr[ lf_bidx ] |= mask;
+              } );
+            }
+            else {
+              Kokkos::single( Kokkos::PerThread( tm ), [=]() {
+                auto s_offset = HBitVector::boffset( ls_idx );
+                auto f_offset = HBitVector::boffset( lf_idx );
+                auto mask = ( BITSET_ONE << ( f_offset - s_offset ) );
+                mask = ( ( ( mask << 1 ) - 1 ) << s_offset );
+                data_ptr[ ls_bidx ] |= mask;
+              } );
+            }
+          };
+
+        if ( rs_idx < l1_size() && rf_idx < l1_size() ) {  // the range is in L1
+          setbits( this->l1_data, rs_idx, rf_idx );
+        }
+        else if ( rs_idx < l1_size() && l1_size() <= rf_idx ) {
+          auto lf_idx = rf_idx - l1_size();
+          setbits( this->l1_data, rs_idx, l1_size() - 1 );
+          setbits( this->l2_data, 0, lf_idx );
+        }
+        else if ( l1_size() <= rs_idx && rs_idx <= rf_idx ) {
+          auto ls_idx = rs_idx - l1_size();
+          auto lf_idx = rf_idx - l1_size();
+          setbits( this->l2_data, ls_idx, lf_idx );
+        }
+        else if ( l1_size() <= rs_idx && rf_idx < l1_size() ) {
+          auto ls_idx = rs_idx - l1_size();
+          setbits( this->l1_data, 0, rf_idx );
+          setbits( this->l2_data, ls_idx, this->l2_size() - 1 );
+        }
+        else {
+          auto ls_idx = rs_idx - l1_size();
+          auto lf_idx = rf_idx - l1_size();
+          setbits( this->l1_data, 0, l1_size() - 1 );
+          setbits( this->l2_data, ls_idx, this->l2_size() - 1 );
+          setbits( this->l2_data, 0, lf_idx );
+        }
       }
 
       /**
