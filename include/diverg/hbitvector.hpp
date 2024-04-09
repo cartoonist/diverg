@@ -1183,67 +1183,6 @@ namespace diverg {
         this->set( tm, s_idx, f_idx,
                     GetHBVThreadAccessType< ExecPartition< TSpec > >{} );
       }
-
-      KOKKOS_INLINE_FUNCTION void
-      _set( const member_type& tm, size_type s_idx, size_type f_idx,
-            HBVAccessLevel< VectorLevel >, HBVThreadAccess< UnsafeAtBoundaries > tac )
-      {
-        assert( s_idx <= f_idx );
-        assert( f_idx < this->m_x_size );
-
-        if ( s_idx == f_idx )
-          return this->set( f_idx, tac );
-
-        auto rs_idx = this->relative_idx( s_idx );
-        auto rf_idx = this->relative_idx( f_idx );
-
-        auto setbits =
-          []( auto data_ptr, auto ls_idx, auto lf_idx ) {
-            auto ls_bidx = HBitVector::bindex( ls_idx );
-            auto lf_bidx = HBitVector::bindex( lf_idx );
-            auto s_offset = HBitVector::boffset( ls_idx );
-            auto f_offset = HBitVector::boffset( lf_idx );
-
-            if ( ls_bidx != lf_bidx ) {
-              auto mask = ( BITSET_ALL_SET << s_offset );
-              Kokkos::atomic_or( &data_ptr[ ls_bidx ], mask );
-              for ( auto i = ls_bidx + 1; i < lf_bidx; ++i ) data_ptr[ i ] |= BITSET_ALL_SET;
-              mask = ( BITSET_ALL_SET >> ( BITSET_WIDTH - 1u - f_offset ) );
-              Kokkos::atomic_or( &data_ptr[ lf_bidx ], mask );
-            }
-            else {
-              auto mask = ( BITSET_ONE << ( f_offset - s_offset ) );
-              mask = ( ( ( mask << 1 ) - 1 ) << s_offset );
-              Kokkos::atomic_or( &data_ptr[ ls_bidx ], mask );
-            }
-          };
-
-        if ( rs_idx < l1_size() && rf_idx < l1_size() ) {  // the range is in L1
-          setbits( this->l1_data, rs_idx, rf_idx );
-        }
-        else if ( rs_idx < l1_size() && l1_size() <= rf_idx ) {
-          auto lf_idx = rf_idx - l1_size();
-          setbits( this->l1_data, rs_idx, l1_size() - 1 );
-          setbits( this->l2_data, 0, lf_idx );
-        }
-        else if ( l1_size() <= rs_idx && rs_idx <= rf_idx ) {
-          auto ls_idx = rs_idx - l1_size();
-          auto lf_idx = rf_idx - l1_size();
-          setbits( this->l2_data, ls_idx, lf_idx );
-        }
-        else if ( l1_size() <= rs_idx && rf_idx < l1_size() ) {
-          auto ls_idx = rs_idx - l1_size();
-          setbits( this->l1_data, 0, rf_idx );
-          setbits( this->l2_data, ls_idx, this->l2_size() - 1 );
-        }
-        else {
-          auto ls_idx = rs_idx - l1_size();
-          auto lf_idx = rf_idx - l1_size();
-          setbits( this->l1_data, 0, l1_size() - 1 );
-          setbits( this->l2_data, ls_idx, this->l2_size() - 1 );
-          setbits( this->l2_data, 0, lf_idx );
-        }
-      }
   };
 }  /* --- end of namespace diverg --- */
 
