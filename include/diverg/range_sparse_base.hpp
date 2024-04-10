@@ -100,6 +100,15 @@ namespace diverg {
     struct Suggested {};
   }
 
+  struct _ExecGridBase {
+    static constexpr inline int
+    row_density( const std::size_t nnz, const std::size_t nr )
+    {
+      if ( nr > 0 ) return nnz / double( nr ) + 0.5;
+      return 1;
+    }
+  };
+
   template< typename TExecSpace, typename TSpec >
   struct ExecGrid;
 
@@ -107,7 +116,8 @@ namespace diverg {
             int TTeamSize,
             int TVectorSize,
             int TTeamWorkSize >
-  struct ExecGrid< TExecSpace, grid::Fixed< TTeamSize, TVectorSize, TTeamWorkSize > > {
+  struct ExecGrid< TExecSpace, grid::Fixed< TTeamSize, TVectorSize, TTeamWorkSize > >
+      : public _ExecGridBase {
     static constexpr inline int
     vector_size( const int=0 )
     {
@@ -115,7 +125,7 @@ namespace diverg {
     }
 
     static constexpr inline int
-    vector_size( const int nnz, const int nr )
+    vector_size( const std::size_t, const std::size_t )
     {
       return TVectorSize;
     }
@@ -127,7 +137,19 @@ namespace diverg {
     }
 
     static constexpr inline int
+    team_size( const std::size_t, const std::size_t )
+    {
+      return TTeamSize;
+    }
+
+    static constexpr inline int
     team_work_size( const int=0 )
+    {
+      return TTeamWorkSize;
+    }
+
+    static constexpr inline int
+    team_work_size( const std::size_t, const std::size_t )
     {
       return TTeamWorkSize;
     }
@@ -137,90 +159,80 @@ namespace diverg {
    *   @brief Suggested grid dimensions as a form of config class.
    */
   template< typename TExecSpace >
-  struct ExecGrid< TExecSpace, grid::Suggested > {
+  struct ExecGrid< TExecSpace, grid::Suggested >
+      : public _ExecGridBase {
     static constexpr inline int
-    vector_size( )
+    vector_size( const int=0 )
     {
       return 1;
     }
 
     static constexpr inline int
-    vector_size( const int row_density )
+    vector_size( const std::size_t, const std::size_t )
     {
       return 1;
     }
 
     static constexpr inline int
-    vector_size( const int nnz, const int nr )
+    team_size( const int=0 )
     {
       return 1;
     }
 
     static constexpr inline int
-    team_size( )
+    team_size( const std::size_t, const std::size_t )
     {
       return 1;
     }
 
     static constexpr inline int
-    team_size( const int vector_size )
-    {
-      return 1;
-    }
-
-    static constexpr inline int
-    team_work_size( )
+    team_work_size( const int=0 )
     {
       return 16;
     }
 
     static constexpr inline int
-    team_work_size( const int team_size )
+    team_work_size( const std::size_t, const std::size_t )
     {
       return 16;
     }
   };
 
   template< typename TExecSpace >
-  struct ExecGrid< TExecSpace, grid::Auto > {
+  struct ExecGrid< TExecSpace, grid::Auto >
+      : public _ExecGridBase {
     static constexpr inline auto
-    vector_size( )
+    vector_size( const int=0 )
     {
       return Kokkos::AUTO;
     }
 
     static constexpr inline auto
-    vector_size( const int row_density )
+    vector_size( const std::size_t, const std::size_t )
     {
       return Kokkos::AUTO;
     }
 
     static constexpr inline auto
-    vector_size( const int nnz, const int nr )
+    team_size( const int=0 )
     {
       return Kokkos::AUTO;
     }
 
     static constexpr inline auto
-    team_size( )
-    {
-      return Kokkos::AUTO;
-    }
-
-    static constexpr inline auto
-    team_size( const int vector_size )
+    team_size( const std::size_t, const std::size_t )
     {
       return Kokkos::AUTO;
     }
 
     static constexpr inline int
-    team_work_size( )
+    team_work_size( const int=0 )
     {
       return 16;
     }
 
     static constexpr inline int
-    team_work_size( const int team_size )
+    team_work_size( const std::size_t, const std::size_t )
     {
       return 16;
     }
@@ -228,17 +240,13 @@ namespace diverg {
 
   #if defined(KOKKOS_ENABLE_CUDA)
   template< >
-  struct ExecGrid< Kokkos::Cuda, grid::Suggested > {
+  struct ExecGrid< Kokkos::Cuda, grid::Suggested >
+      : public _ExecGridBase {
+    /* === MEMBER TYPES === */
+    using base_type = _ExecGridBase;
     /* === STATIC MEMBERS === */
     static constexpr const int MAX_VECTOR_SIZE = 32;
     /* === STATIC METHODS === */
-    static constexpr inline int
-    row_density( const std::size_t nnz, const std::size_t nr )
-    {
-      if ( nr > 0 ) return nnz / double( nr ) + 0.5;
-      return 1;
-    }
-
     static constexpr inline int
     vector_size( const int rdense )
     {
@@ -263,60 +271,61 @@ namespace diverg {
     static constexpr inline int
     vector_size( const std::size_t nnz, const std::size_t nr )
     {
-      return vector_size( row_density( nnz, nr ) );
+      return ExecGrid::vector_size( base_type::row_density( nnz, nr ) );
     }
 
     static constexpr inline int
-    team_size( const int vector_size )
+    team_size( const int rdense )
     {
       // TODO: where this is used, tune the target value for
       // threads per block (but 256 is probably OK for CUDA and HIP)
-      return 256 / vector_size;
+      return 256 / ExecGrid::vector_size( rdense );
     }
 
     static constexpr inline int
-    team_work_size( const int team_size )
+    team_size( const std::size_t nnz, const std::size_t nr )
     {
-      return team_size;
+      return ExecGrid::team_size( base_type::row_density( nnz, nr ) );
+    }
+
+    static constexpr inline int
+    team_work_size( const int rdense )
+    {
+      return ExecGrid::team_size( rdense );
+    }
+
+    static constexpr inline int
+    team_work_size( const std::size_t nnz, const std::size_t nr )
+    {
+      return ExecGrid::team_work_size( base_type::row_density( nnz, nr ) );
     }
   };
 
   template< >
-  struct ExecGrid< Kokkos::Cuda, grid::Auto > {
+  struct ExecGrid< Kokkos::Cuda, grid::Auto >
+      : public _ExecGridBase {
     static constexpr inline auto
-    vector_size( )
+    vector_size( const int=0 )
     {
       return Kokkos::AUTO;
     }
 
     static constexpr inline auto
-    vector_size( const int row_density )
+    vector_size( const std::size_t, const std::size_t )
     {
       return Kokkos::AUTO;
     }
 
     static constexpr inline auto
-    vector_size( const int nnz, const int nr )
+    team_size( const int=0 )
     {
       return Kokkos::AUTO;
     }
 
     static constexpr inline auto
-    team_size( )
+    team_size( const std::size_t, const std::size_t )
     {
       return Kokkos::AUTO;
-    }
-
-    static constexpr inline auto
-    team_size( const int vector_size )
-    {
-      return Kokkos::AUTO;
-    }
-
-    static constexpr inline int
-    team_work_size( const int team_size )
-    {
-      return team_size;
     }
   };
   #endif
@@ -416,10 +425,14 @@ namespace diverg {
     {
       this->a_ncols = a.numCols();
       this->b_ncols = b.numCols();
+      this->a_nnz = a.nnz();
+      this->b_nnz = b.nnz();
     }
     /* === DATA MEMBERS === */
     ordinal_type a_ncols;
     ordinal_type b_ncols;
+    size_type a_nnz;
+    size_type b_nnz;
   };
 
   template<

@@ -490,7 +490,7 @@ TEMPLATE_SCENARIO_SIG( "Validation and verification of range SpGEMM", "[range_sp
     ( ( HBitVectorAccumulator<> ), ThreadRangeParallelPartition, ( crs_matrix::RangeDynamic ), char, int32_t, uint64_t, 6521, 200000 ),
     ( ( HBitVectorAccumulator<> ), ThreadParallelPartition, ( crs_matrix::RangeDynamic ), char, int32_t, uint64_t, 6521, 200000 ) )
 {
-  typedef SparseConfig< grid::Auto, TAccumulator, TPartition > config_type;
+  typedef SparseConfig< grid::Suggested, TAccumulator, TPartition > config_type;
   typedef typename config_type::execution_space execution_space;
   typedef typename execution_space::device_type device_t;
   typedef CRSMatrix< TSpec, bool, TOrdinal, TSize > rcrsmatrix_t;
@@ -546,7 +546,7 @@ TEMPLATE_SCENARIO_SIG( "Validation and verification of range power", "[range_spa
     ( ( HBitVectorAccumulator<> ), ThreadRangeParallelPartition, ( crs_matrix::RangeDynamic ), char, int32_t, uint64_t, 6521, 4000, 100 ),
     ( ( HBitVectorAccumulator<> ), ThreadParallelPartition, ( crs_matrix::RangeDynamic ), char, int32_t, uint64_t, 6521, 4000, 100 ) )
 {
-  typedef SparseConfig< grid::Auto, TAccumulator, TPartition > config_type;
+  typedef SparseConfig< grid::Suggested, TAccumulator, TPartition > config_type;
   typedef typename config_type::execution_space execution_space;
   typedef typename execution_space::device_type device_t;
   typedef CRSMatrix< TSpec, bool, TOrdinal, TSize > rcrsmatrix_t;

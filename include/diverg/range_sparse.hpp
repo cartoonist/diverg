@@ -1110,10 +1110,15 @@ namespace diverg {
         "both entries and row map views should be in the same memory space" );
 
     auto a_nrows = a_rowmap.extent( 0 ) - 1;
+    auto b_nrows = b_rowmap.extent( 0 ) - 1;
     auto b_ncols = handle.b_ncols;
-    auto vector_size = grid.vector_size();  // or hbv_type::l1_num_bitsets();
-    auto team_size = grid.team_size();
-    auto work_size = grid.team_work_size( team_size );
+    auto b_row_density = grid.row_density( handle.b_nnz, b_nrows );
+    size_type bitset_count = grid.row_density( b_row_density, hbv_type::BITSET_WIDTH );
+    auto rdensity = DIVERG_MACRO_MAX( bitset_count, hbv_type::l1_num_bitsets() );
+
+    auto vector_size = grid.vector_size( rdensity );
+    auto team_size = grid.team_size( rdensity );
+    auto work_size = grid.team_work_size( rdensity );
     auto nof_teams = a_nrows / work_size + 1;
     auto policy = policy_type( nof_teams, team_size, vector_size );
     hbv_type::set_scratch_size( policy, b_ncols, part );
@@ -1254,10 +1259,15 @@ namespace diverg {
         "both entries and row map views should be in the same memory space" );
 
     auto a_nrows = a_rowmap.extent( 0 ) - 1;
+    auto b_nrows = b_rowmap.extent( 0 ) - 1;
     auto b_ncols = handle.b_ncols;
-    auto vector_size = grid.vector_size();  // or hbv_type::l1_num_bitsets();
-    auto team_size = grid.team_size();
-    auto work_size = grid.team_work_size( team_size );
+    auto b_row_density = grid.row_density( handle.b_nnz, b_nrows );
+    size_type bitset_count = grid.row_density( b_row_density, hbv_type::BITSET_WIDTH );
+    auto rdensity = DIVERG_MACRO_MAX( bitset_count, hbv_type::l1_num_bitsets() );
+
+    auto vector_size = grid.vector_size( rdensity );
+    auto team_size = grid.team_size( rdensity );
+    auto work_size = grid.team_work_size( rdensity );
     auto nof_teams = a_nrows / work_size + 1;
     auto policy = policy_type( nof_teams, team_size, vector_size );
     hbv_type::set_scratch_size( policy, b_ncols, part );
@@ -1407,9 +1417,16 @@ namespace diverg {
         "both entries and row map views should be in the same memory space" );
 
     auto a_nrows = a_rowmap.extent( 0 ) - 1;
+    auto b_nrows = b_rowmap.extent( 0 ) - 1;
     auto b_ncols = handle.b_ncols;
-    auto vector_size = grid.vector_size();  // or hbv_type::l1_num_bitsets();
-    auto team_size = grid.team_size();
+    auto b_rnnz = b_entries.extent( 0 ) / 2;
+    auto b_row_density = grid.row_density( handle.b_nnz, b_nrows );
+    auto b_range_density = grid.row_density( b_row_density, b_rnnz );
+    size_type bitset_count = grid.row_density( b_range_density, hbv_type::BITSET_WIDTH );
+    auto rdensity = DIVERG_MACRO_MAX( bitset_count, hbv_type::l1_num_bitsets() );
+
+    auto vector_size = grid.vector_size( rdensity );
+    auto team_size = grid.team_size( rdensity );
     auto policy = policy_type( a_nrows, team_size, vector_size );
     hbv_type::set_scratch_size( policy, b_ncols, part );
 
@@ -1547,9 +1564,16 @@ namespace diverg {
         "both entries and row map views should be in the same memory space" );
 
     auto a_nrows = a_rowmap.extent( 0 ) - 1;
+    auto b_nrows = b_rowmap.extent( 0 ) - 1;
     auto b_ncols = handle.b_ncols;
-    auto vector_size = grid.vector_size();  // or hbv_type::l1_num_bitsets();
-    auto team_size = grid.team_size();
+    auto b_rnnz = b_entries.extent( 0 ) / 2;
+    auto b_row_density = grid.row_density( handle.b_nnz, b_nrows );
+    auto b_range_density = grid.row_density( b_row_density, b_rnnz );
+    size_type bitset_count = grid.row_density( b_range_density, hbv_type::BITSET_WIDTH );
+    auto rdensity = DIVERG_MACRO_MAX( bitset_count, hbv_type::l1_num_bitsets() );
+
+    auto vector_size = grid.vector_size( rdensity );
+    auto team_size = grid.team_size( rdensity );
     auto policy = policy_type( a_nrows, team_size, vector_size );
     hbv_type::set_scratch_size( policy, b_ncols, part );
 
@@ -1701,9 +1725,14 @@ namespace diverg {
         "both entries and row map views should be in the same memory space" );
 
     auto a_nrows = a_rowmap.extent( 0 ) - 1;
+    auto b_nrows = b_rowmap.extent( 0 ) - 1;
     auto b_ncols = handle.b_ncols;
-    auto vector_size = grid.vector_size();  // or hbv_type::l1_num_bitsets();
-    auto team_size = grid.team_size();
+    auto b_row_density = grid.row_density( handle.b_nnz, b_nrows );
+    size_type bitset_count = grid.row_density( b_row_density, hbv_type::BITSET_WIDTH );
+    auto rdensity = DIVERG_MACRO_MAX( bitset_count, hbv_type::l1_num_bitsets() );
+
+    auto vector_size = grid.vector_size( rdensity );
+    auto team_size = grid.team_size( rdensity );
     auto policy = policy_type( a_nrows, team_size, vector_size );
     hbv_type::set_scratch_size( policy, b_ncols, part );
 
@@ -1840,9 +1869,14 @@ namespace diverg {
         "both entries and row map views should be in the same memory space" );
 
     auto a_nrows = a_rowmap.extent( 0 ) - 1;
+    auto b_nrows = b_rowmap.extent( 0 ) - 1;
     auto b_ncols = handle.b_ncols;
-    auto vector_size = grid.vector_size();  // or hbv_type::l1_num_bitsets();
-    auto team_size = grid.team_size();
+    auto b_row_density = grid.row_density( handle.b_nnz, b_nrows );
+    size_type bitset_count = grid.row_density( b_row_density, hbv_type::BITSET_WIDTH );
+    auto rdensity = DIVERG_MACRO_MAX( bitset_count, hbv_type::l1_num_bitsets() );
+
+    auto vector_size = grid.vector_size( rdensity );
+    auto team_size = grid.team_size( rdensity );
     auto policy = policy_type( a_nrows, team_size, vector_size );
     hbv_type::set_scratch_size( policy, b_ncols, part );
 
@@ -1993,9 +2027,14 @@ namespace diverg {
         "both entries and row map views should be in the same memory space" );
 
     auto a_nrows = a_rowmap.extent( 0 ) - 1;
+    auto b_nrows = b_rowmap.extent( 0 ) - 1;
     auto b_ncols = handle.b_ncols;
-    auto vector_size = grid.vector_size();  // or hbv_type::l1_num_bitsets();
-    auto team_size = grid.team_size();
+    auto b_row_density = grid.row_density( handle.b_nnz, b_nrows );
+    size_type bitset_count = grid.row_density( b_row_density, hbv_type::BITSET_WIDTH );
+    auto rdensity = DIVERG_MACRO_MAX( bitset_count, hbv_type::l1_num_bitsets() );
+
+    auto vector_size = grid.vector_size( rdensity );
+    auto team_size = grid.team_size( rdensity );
     auto policy = policy_type( a_nrows, team_size, vector_size );
     hbv_type::set_scratch_size( policy, b_ncols, part );
 
@@ -2136,9 +2175,14 @@ namespace diverg {
         "both entries and row map views should be in the same memory space" );
 
     auto a_nrows = a_rowmap.extent( 0 ) - 1;
+    auto b_nrows = b_rowmap.extent( 0 ) - 1;
     auto b_ncols = handle.b_ncols;
-    auto vector_size = grid.vector_size();  // or hbv_type::l1_num_bitsets();
-    auto team_size = grid.team_size();
+    auto b_row_density = grid.row_density( handle.b_nnz, b_nrows );
+    size_type bitset_count = grid.row_density( b_row_density, hbv_type::BITSET_WIDTH );
+    auto rdensity = DIVERG_MACRO_MAX( bitset_count, hbv_type::l1_num_bitsets() );
+
+    auto vector_size = grid.vector_size( rdensity );
+    auto team_size = grid.team_size( rdensity );
     auto policy = policy_type( a_nrows, team_size, vector_size );
     hbv_type::set_scratch_size( policy, b_ncols, part );
 
