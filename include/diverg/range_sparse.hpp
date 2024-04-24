@@ -1445,6 +1445,8 @@ namespace diverg {
           // Setting all L1 bitsets in `h_bv` to zero
           hbv.clear_l1( tm, part );
 
+          tm.team_barrier();
+
           for ( ; a_idx != a_end; a_idx += 2 ) {
             auto b_row = a_entries( a_idx );
             auto b_last_row = a_entries( a_idx + 1 );
@@ -1591,6 +1593,8 @@ namespace diverg {
 
           // Setting all L1 bitsets in `h_bv` to zero
           hbv.clear_l1( tm, part );
+
+          tm.team_barrier();
 
           for ( ; a_idx != a_end; a_idx += 2 ) {
             auto b_row = a_entries( a_idx );
