@@ -240,7 +240,8 @@ namespace diverg {
   create_random_matrix_on_host( typename TXCRSMatrix::ordinal_type n,
                                 typename TXCRSMatrix::size_type nnz,
                                 typename TXCRSMatrix::value_type lower=std::numeric_limits< typename TXCRSMatrix::value_type >::min(),
-                                typename TXCRSMatrix::value_type upper=std::numeric_limits< typename TXCRSMatrix::value_type >::max() )
+                                typename TXCRSMatrix::value_type upper=std::numeric_limits< typename TXCRSMatrix::value_type >::max(),
+                                unsigned int seed=0 )
   {
     typedef TXCRSMatrix xcrsmatrix_t;
     typedef typename xcrsmatrix_t::value_type value_type;
@@ -252,8 +253,7 @@ namespace diverg {
     assert( n > 1 && nnz > 0 && ( nnz / n ) <= static_cast< size_type >( n ) );
 
     values_t a_values( Kokkos::ViewAllocateWithoutInitializing( "R" ), nnz );
-    row_map_t a_row_map( Kokkos::ViewAllocateWithoutInitializing( "rowmap" ),
-                         n + 1 );
+    row_map_t a_row_map( "rowmap", n + 1 );
     entries_t a_entries( Kokkos::ViewAllocateWithoutInitializing( "entries" ),
                          nnz );
 
@@ -264,12 +264,18 @@ namespace diverg {
     // Zero initialisation: the rest will be initialized later
     h_a_row_map( 0 ) = 0;
 
+    std::shared_ptr< std::mt19937 > gp( &random::gen, [](auto){} );
+    if ( seed != 0 ) {
+      gp = std::make_shared< std::mt19937 >();
+      gp->seed( seed );
+    }
+
     Kokkos::parallel_for(
         "diverg::crs_matrix::::create_random_matrix_on_host::random_values",
         Kokkos::RangePolicy< Kokkos::DefaultHostExecutionSpace >( 0, nnz ),
         [=]( const uint64_t i ) {
           value_type v = 0;
-          while ( v == 0 ) v = diverg::random::random_integer( lower, upper );
+          while ( v == 0 ) v = diverg::random::random_integer( lower, upper, *gp );
           h_a_values( i ) = v;
         } );
 
@@ -277,7 +283,7 @@ namespace diverg {
       // Distributing nnz values into rows
       std::size_t i = 0;
       while ( i < nnz ) {
-        auto idx = diverg::random::random_index( n );
+        auto idx = diverg::random::random_index( n, *gp );
         do {
           if ( h_a_row_map( idx + 1 ) < static_cast< size_type >( n ) ) {
             ++h_a_row_map( idx + 1 );
@@ -311,8 +317,7 @@ namespace diverg {
           auto begin = h_a_entries.data() + l;
           auto end = h_a_entries.data() + u;
           std::sample( diverg::RangeIterator< decltype( n ) >{ 0 },
-                       diverg::RangeIterator{ n }, begin, u - l,
-                       diverg::random::gen );
+                       diverg::RangeIterator{ n }, begin, u - l, *gp );
           std::sort( begin, end );
         } );
 
@@ -341,8 +346,7 @@ namespace diverg {
    *  NOTE: The output matrix is constructed on device memory space. It does
    *    not performs any deep copy between device and host.
    */
-  template< typename TXCRSMatrix,
-            typename THostSpace=Kokkos::DefaultHostExecutionSpace >
+  template< typename TXCRSMatrix >
   inline TXCRSMatrix
   create_random_matrix(
       typename TXCRSMatrix::ordinal_type n,
@@ -350,7 +354,8 @@ namespace diverg {
       typename TXCRSMatrix::value_type lower
       = std::numeric_limits< typename TXCRSMatrix::value_type >::min(),
       typename TXCRSMatrix::value_type upper
-      = std::numeric_limits< typename TXCRSMatrix::value_type >::max() )
+      = std::numeric_limits< typename TXCRSMatrix::value_type >::max(),
+      unsigned int seed=0 )
   {
     typedef TXCRSMatrix xcrsmatrix_t;
     typedef typename TXCRSMatrix::execution_space execution_space;
@@ -376,7 +381,8 @@ namespace diverg {
     entries_t r_entries( Kokkos::ViewAllocateWithoutInitializing( "entries" ),
                          nnz );
 
-    random_pool_t random_pool( diverg::random::rd() );
+    if ( seed == 0 ) seed = diverg::random::rd();
+    random_pool_t random_pool( seed );
 
     Kokkos::parallel_for( "diverg::crs_matrix::create_random_matrix::random_values",
                           range_policy_t( 0, nnz ),
@@ -491,9 +497,10 @@ namespace diverg {
   template< typename TXCRSMatrix >
   inline TXCRSMatrix
   create_random_binary_matrix( typename TXCRSMatrix::ordinal_type n,
-                               typename TXCRSMatrix::size_type nnz )
+                               typename TXCRSMatrix::size_type nnz,
+                               unsigned int seed=0 )
   {
-    return create_random_matrix< TXCRSMatrix >( n, nnz, 1, 2 );
+    return create_random_matrix< TXCRSMatrix >( n, nnz, 1, 2, seed );
   }
 
   /**
@@ -501,10 +508,11 @@ namespace diverg {
    *          CRS and DIVERG Range CRS formats.
    */
   template< typename TXCRSMatrix, typename TRCRSMatrix >
-  inline TXCRSMatrix
+  inline std::enable_if_t< !std::is_integral< TRCRSMatrix >::value, TXCRSMatrix >
   create_random_binary_matrix( typename TXCRSMatrix::ordinal_type n,
                                typename TXCRSMatrix::size_type nnz,
-                               TRCRSMatrix& range_crs )
+                               TRCRSMatrix& range_crs,
+                               unsigned int seed=0 )
   {
     typedef TXCRSMatrix xcrsmatrix_t;
     typedef typename TXCRSMatrix::HostMirror xcrsmatrix_host_t;
@@ -514,7 +522,7 @@ namespace diverg {
     typename xcrsmatrix_t::values_type::non_const_type::HostMirror h_r_values;
     typename xcrsmatrix_t::row_map_type::non_const_type::HostMirror h_r_row_map;
 
-    auto crs = create_random_binary_matrix< xcrsmatrix_t >( n, nnz );
+    auto crs = create_random_binary_matrix< xcrsmatrix_t >( n, nnz, seed );
 
     h_r_values = Kokkos::create_mirror_view( crs.values );
     h_r_row_map = Kokkos::create_mirror_view( crs.graph.row_map );

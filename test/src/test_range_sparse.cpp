@@ -277,28 +277,62 @@ _is_same( TXEntriesDeviceView x_entries,
 
   {
     size_type num_matches = 0;
+    size_type mi;
     Kokkos::parallel_reduce(
         "diverg::test_range_sparse::compare_rowmap",
         Kokkos::RangePolicy< execution_space >( 0, x_rowmap.extent( 0 ) ),
-        KOKKOS_LAMBDA ( const uint64_t i, size_type& l_nm ) {
+        KOKKOS_LAMBDA ( const uint64_t i,
+                        size_type& l_nm, size_type& l_mi ) {
           if ( x_rowmap( i ) == b_rowmap( i ) ) ++l_nm;
+          else if ( i < l_mi ) l_mi = i;
         },
-        num_matches );
+        num_matches, Kokkos::Min< size_type >( mi ) );
 
-    if ( num_matches != x_rowmap.extent( 0 ) ) return false;
+    if ( num_matches != x_rowmap.extent( 0 ) ) {
+      auto h_x_rowmap = Kokkos::create_mirror_view( x_rowmap );
+      auto h_b_rowmap = Kokkos::create_mirror_view( b_rowmap );
+      Kokkos::deep_copy( h_x_rowmap, x_rowmap );
+      Kokkos::deep_copy( h_b_rowmap, b_rowmap );
+      std::cout << "x: " << x_rowmap.extent( 0 ) - 1 << ", b: " << b_rowmap.extent( 0 ) - 1
+                << std::endl;
+      std::cout << "Mismatching row map:\n"
+                << "\t i: \t...\t" << mi - 1 << "\t" << mi << "\t" << mi + 1 << "\t..." << "\n"
+                << "\txr: \t...\t" << h_x_rowmap( mi - 1 ) << "\t" << h_x_rowmap( mi ) << "\t"
+                << h_x_rowmap( mi + 1 ) << "\t..." << "\n"
+                << "\tbr: \t...\t" << h_b_rowmap( mi - 1 ) << "\t" << h_b_rowmap( mi ) << "\t"
+                << h_b_rowmap( mi + 1 ) << "\t..." << "\n"
+                << std::endl;
+
+      //return false;
+    }
   }
 
   {
     size_type num_matches = 0;
+    size_type mi;
     Kokkos::parallel_reduce(
         "diverg::test_range_sparse::compare_entries",
         Kokkos::RangePolicy< execution_space >( 0, x_entries.extent( 0 ) ),
-        KOKKOS_LAMBDA ( const uint64_t i, size_type& l_nm ) {
+        KOKKOS_LAMBDA ( const uint64_t i, size_type& l_nm, size_type& l_mi ) {
           if ( x_entries( i ) == b_entries( i ) ) ++l_nm;
+          else if ( i < l_mi ) l_mi = i;
         },
-        num_matches );
+        num_matches, Kokkos::Min< size_type >( mi ) );
 
-    if ( num_matches != x_entries.extent( 0 ) ) return false;
+    if ( num_matches != x_entries.extent( 0 ) ) {
+      auto h_x_entries = Kokkos::create_mirror_view( x_entries );
+      auto h_b_entries = Kokkos::create_mirror_view( b_entries );
+      Kokkos::deep_copy( h_x_entries, x_entries );
+      Kokkos::deep_copy( h_b_entries, b_entries );
+      std::cout << "Mismatching entries:\n"
+                << "\t i: \t...\t" << mi - 1 << "\t" << mi << "\t" << mi + 1 << "\t..." << "\n"
+                << "\txe: \t...\t" << h_x_entries( mi - 1 ) << "\t" << h_x_entries( mi ) << "\t"
+                << h_x_entries( mi + 1 ) << "\t..." << "\n"
+                << "\tbe: \t...\t" << h_b_entries( mi - 1 ) << "\t" << h_b_entries( mi ) << "\t"
+                << h_b_entries( mi + 1 ) << "\t..." << "\n"
+                << std::endl;
+      return false;
+    }
   }
 
   return true;
@@ -314,9 +348,20 @@ is_same( TXCRSMatrix& x_mat, TRCRSMatrix& r_mat )
   TBCRSMatrix b_mat;
   b_mat.assign( r_mat );
 
-  if ( x_mat.numRows() != b_mat.numRows() || x_mat.numCols() != b_mat.numCols()
-       || x_mat.nnz() != b_mat.nnz() )
+  if ( x_mat.numRows() != b_mat.numRows() ) {
+    std::cout << "Mismatching number of rows" << std::endl;
     return false;
+  }
+  if ( x_mat.numCols() != b_mat.numCols() ) {
+    std::cout << "Mismatching number of columns" << std::endl;
+    return false;
+  }
+  if ( x_mat.nnz() != b_mat.nnz() ) {
+    std::cout << "Mismatching number of non-zero values (x.nnz, b.nnz): ("
+              << x_mat.nnz() << ", " << b_mat.nnz() << " | " << r_mat.nnz()
+              << ")" << std::endl;
+  //  return false;
+  }
 
   auto b_mat_entries = b_mat.entries_device_view( xcrs_execution_space{} );
   auto b_mat_row_map = b_mat.rowmap_device_view( xcrs_execution_space{} );
@@ -501,8 +546,10 @@ TEMPLATE_SCENARIO_SIG( "Validation and verification of range SpGEMM", "[range_sp
   GIVEN( "A random square matrix of order " + std::to_string( N ) + " with "
          + std::to_string( NNZ ) + " non-zero values" )
   {
-    rcrsmatrix_t rrand_mat;
-    xcrsmatrix_t xrand_mat = create_random_binary_matrix< xcrsmatrix_t >( N, NNZ, rrand_mat );
+    auto h_xrand_mat = create_random_matrix_on_host< xcrs_host_mirror >( N, NNZ, 1, 2, rnd::get_iseed() );
+    rcrsmatrix_t rrand_mat( h_xrand_mat );
+    auto xrand_mat = copy_xcrs< xcrsmatrix_t >( h_xrand_mat );
+    INFO( "Seed for the random number generator: " << rnd::get_iseed() );
 
     REQUIRE( rrand_mat.nnz() == xrand_mat.nnz() );
     REQUIRE( rrand_mat.nnz() == NNZ );
@@ -557,8 +604,10 @@ TEMPLATE_SCENARIO_SIG( "Validation and verification of range power", "[range_spa
   GIVEN( "A random square matrix of order " + std::to_string( N ) + " with "
          + std::to_string( NNZ ) + " non-zero values" )
   {
-    rcrsmatrix_t rrand_mat;
-    xcrsmatrix_t xrand_mat = create_random_binary_matrix< xcrsmatrix_t >( N, NNZ, rrand_mat );
+    auto h_xrand_mat = create_random_matrix_on_host< xcrs_host_mirror >( N, NNZ, 1, 2, rnd::get_iseed() );
+    rcrsmatrix_t rrand_mat( h_xrand_mat );
+    auto xrand_mat = copy_xcrs< xcrsmatrix_t >( h_xrand_mat );
+    INFO( "Seed for the random number generator: " << rnd::get_iseed() );
 
     REQUIRE( rrand_mat.nnz() == xrand_mat.nnz() );
     REQUIRE( rrand_mat.nnz() == NNZ );
@@ -611,8 +660,9 @@ TEMPLATE_SCENARIO_SIG( "Validation and verification of range SpAdd", "[range_spa
   {
     rcrsmatrix_t rrand_mat1;
     rcrsmatrix_t rrand_mat2;
-    xcrsmatrix_t xrand_mat1 = create_random_binary_matrix< xcrsmatrix_t >( N, NNZ, rrand_mat1 );
-    xcrsmatrix_t xrand_mat2 = create_random_binary_matrix< xcrsmatrix_t >( N, NNZ, rrand_mat2 );
+    xcrsmatrix_t xrand_mat1 = create_random_binary_matrix< xcrsmatrix_t >( N, NNZ, rrand_mat1, rnd::get_iseed() );
+    xcrsmatrix_t xrand_mat2 = create_random_binary_matrix< xcrsmatrix_t >( N, NNZ, rrand_mat2, rnd::get_iseed() );
+    INFO( "Seed for the random number generator: " << rnd::get_iseed() );
 
     REQUIRE( rrand_mat1.nnz() == xrand_mat1.nnz() );
     REQUIRE( rrand_mat2.nnz() == xrand_mat2.nnz() );
