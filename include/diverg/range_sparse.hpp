@@ -1754,10 +1754,8 @@ namespace diverg {
 
           // Setting all L1 bitsets in `h_bv` to zero
           hbv.clear_l1( tm, part );
-          hbv.clear_l2( tm, part );
 
-          tm.team_barrier();
-
+          // Calculating min and max column indices in the 'row'
           Kokkos::parallel_reduce(
               Kokkos::TeamThreadRange( tm, a_idx / 2, a_end / 2 ),
               [&]( const uint64_t ii,
@@ -1765,38 +1763,67 @@ namespace diverg {
                 auto i = ii * 2;
                 auto b_row = a_entries( i );
                 auto b_last_row = a_entries( i + 1 );
-                ordinal_type br_min = lc_min;  // B row range min
-                ordinal_type br_max = lc_max;  // B row range max
-                for ( ; b_row <= b_last_row; ++b_row ) {
-                  auto b_idx = b_rowmap( b_row );
-                  auto b_end = b_rowmap( b_row + 1 );
+                ordinal_type br_min;  // B row range min
+                ordinal_type br_max;  // B row range max
+                Kokkos::parallel_reduce(
+                    Kokkos::ThreadVectorRange( tm, b_row, b_last_row + 1 ),
+                    [&]( const uint64_t j,
+                         ordinal_type& lbr_min, ordinal_type& lbr_max ) {
+                      auto b_idx = b_rowmap( j );
+                      auto b_end = b_rowmap( j + 1 );
 
-                  if ( b_idx == b_end ) continue;
+                      if ( b_idx == b_end ) return;
 
-                  auto b_min = b_entries( b_idx );
-                  if ( b_min < br_min ) {
-                    b_min = hbv_type::aligned_index( b_min );
-                    br_min = b_min;  // update br_min
-                  }
-                  auto b_max = b_entries( b_end - 1 ) + 1;
-                  if ( br_max < b_max ) {
-                    b_max = hbv_type::aligned_index_ceil( b_max );
-                    br_max = b_max;  // update br_max
-                  }
+                      auto b_min = b_entries( b_idx );
+                      if ( b_min < lbr_min ) {
+                        b_min = hbv_type::aligned_index( b_min );
+                        lbr_min = b_min;  // update lbr_min
+                      }
 
-                  for ( ; b_idx < b_end; b_idx += 2 ) {
-                    auto s = b_entries( b_idx );
-                    auto f = b_entries( b_idx + 1 );
-                    hbv.set( tm, s, f, part );
-                  }
-                }
+                      auto b_max = b_entries( b_end - 1 ) + 1;
+                      if ( lbr_max < b_max ) {
+                        b_max = hbv_type::aligned_index_ceil( b_max );
+                        lbr_max = b_max;  // update br_max
+                      }
+                    },
+                    Kokkos::Min< ordinal_type >( br_min ),
+                    Kokkos::Max< ordinal_type >( br_max ) );
                 if ( br_min < lc_min ) lc_min = br_min;
                 if ( br_max > lc_max ) lc_max = br_max;
               },
               Kokkos::Min< ordinal_type >( c_min ),
               Kokkos::Max< ordinal_type >( c_max ) );
 
-          if ( c_max < c_min ) c_max = c_min;
+          auto l1b = hbv.l1_begin_idx();
+          auto l1e = l1b + hbv.l1_size();
+          if ( c_max < c_min ) {
+            c_min = l1b;
+            c_max = l1b;
+          }
+          if ( c_min < l1b )
+            hbv.clear_l2_by_idx( tm, c_min, l1b, part );
+          if ( l1e < c_max )
+            hbv.clear_l2_by_idx( tm, l1e, c_max, part );
+
+          tm.team_barrier();
+
+          Kokkos::parallel_for(
+              Kokkos::TeamThreadRange( tm, a_idx / 2, a_end / 2 ),
+              [&]( const uint64_t ii ) {
+                auto i = ii * 2;
+                auto b_row = a_entries( i );
+                auto b_last_row = a_entries( i + 1 );
+                auto b_idx = b_rowmap( b_row );
+                auto b_end = b_rowmap( b_last_row + 1 );
+                for ( ; b_idx < b_end; b_idx += 2 ) {
+                  auto s = b_entries( b_idx );
+                  auto f = b_entries( b_idx + 1 );
+                  hbv.set( tm, s, f, part );
+                }
+              } );
+
+          tm.team_barrier();
+
           auto c_lbs = hbv_type::bindex( c_min );
           auto c_rbs = hbv_type::bindex( c_max );
           ordinal_type count = 0;
@@ -1898,10 +1925,8 @@ namespace diverg {
 
           // Setting all L1 bitsets in `h_bv` to zero
           hbv.clear_l1( tm, part );
-          hbv.clear_l2( tm, part );
 
-          tm.team_barrier();
-
+          // Calculating min and max column indices in the 'row'
           Kokkos::parallel_reduce(
               Kokkos::TeamThreadRange( tm, a_idx / 2, a_end / 2 ),
               [&]( const uint64_t ii,
@@ -1909,38 +1934,67 @@ namespace diverg {
                 auto i = ii * 2;
                 auto b_row = a_entries( i );
                 auto b_last_row = a_entries( i + 1 );
-                ordinal_type br_min = lc_min;  // B row range min
-                ordinal_type br_max = lc_max;  // B row range max
-                for ( ; b_row <= b_last_row; ++b_row ) {
-                  auto b_idx = b_rowmap( b_row );
-                  auto b_end = b_rowmap( b_row + 1 );
+                ordinal_type br_min;  // B row range min
+                ordinal_type br_max;  // B row range max
+                Kokkos::parallel_reduce(
+                    Kokkos::ThreadVectorRange( tm, b_row, b_last_row + 1 ),
+                    [&]( const uint64_t j,
+                         ordinal_type& lbr_min, ordinal_type& lbr_max ) {
+                      auto b_idx = b_rowmap( j );
+                      auto b_end = b_rowmap( j + 1 );
 
-                  if ( b_idx == b_end ) continue;
+                      if ( b_idx == b_end ) return;
 
-                  auto b_min = b_entries( b_idx );
-                  if ( b_min < br_min ) {
-                    b_min = hbv_type::aligned_index( b_min );
-                    br_min = b_min;  // update br_min
-                  }
-                  auto b_max = b_entries( b_end - 1 ) + 1;
-                  if ( br_max < b_max ) {
-                    b_max = hbv_type::aligned_index_ceil( b_max );
-                    br_max = b_max;  // update br_max
-                  }
+                      auto b_min = b_entries( b_idx );
+                      if ( b_min < lbr_min ) {
+                        b_min = hbv_type::aligned_index( b_min );
+                        lbr_min = b_min;  // update lbr_min
+                      }
 
-                  for ( ; b_idx < b_end; b_idx += 2 ) {
-                    auto s = b_entries( b_idx );
-                    auto f = b_entries( b_idx + 1 );
-                    hbv.set( tm, s, f, part );
-                  }
-                }
+                      auto b_max = b_entries( b_end - 1 ) + 1;
+                      if ( lbr_max < b_max ) {
+                        b_max = hbv_type::aligned_index_ceil( b_max );
+                        lbr_max = b_max;  // update br_max
+                      }
+                    },
+                    Kokkos::Min< ordinal_type >( br_min ),
+                    Kokkos::Max< ordinal_type >( br_max ) );
                 if ( br_min < lc_min ) lc_min = br_min;
                 if ( br_max > lc_max ) lc_max = br_max;
               },
               Kokkos::Min< ordinal_type >( c_min ),
               Kokkos::Max< ordinal_type >( c_max ) );
 
-          if ( c_max < c_min ) c_max = c_min;
+          auto l1b = hbv.l1_begin_idx();
+          auto l1e = l1b + hbv.l1_size();
+          if ( c_max < c_min ) {
+            c_min = l1b;
+            c_max = l1b;
+          }
+          if ( c_min < l1b )
+            hbv.clear_l2_by_idx( tm, c_min, l1b, part );
+          if ( l1e < c_max )
+            hbv.clear_l2_by_idx( tm, l1e, c_max, part );
+
+          tm.team_barrier();
+
+          Kokkos::parallel_for(
+              Kokkos::TeamThreadRange( tm, a_idx / 2, a_end / 2 ),
+              [&]( const uint64_t ii ) {
+                auto i = ii * 2;
+                auto b_row = a_entries( i );
+                auto b_last_row = a_entries( i + 1 );
+                auto b_idx = b_rowmap( b_row );
+                auto b_end = b_rowmap( b_last_row + 1 );
+                for ( ; b_idx < b_end; b_idx += 2 ) {
+                  auto s = b_entries( b_idx );
+                  auto f = b_entries( b_idx + 1 );
+                  hbv.set( tm, s, f, part );
+                }
+              } );
+
+          tm.team_barrier();
+
           auto c_lbs = hbv_type::bindex( c_min );
           auto c_rbs = hbv_type::bindex( c_max );
           Kokkos::parallel_for(
