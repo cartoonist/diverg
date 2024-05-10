@@ -338,7 +338,7 @@ template< typename TExecSpace=Kokkos::DefaultExecutionSpace,
           typename TAccumulator=HBitVectorAccumulator< 8192 >,
           typename TOrdinal=int32_t, typename TScalar=int >
 void
-benchmark_range_spgemm_random( TOrdinal n, std::size_t nnz, bool verbose )
+benchmark_range_spgemm_random( TOrdinal n, std::size_t nnz, bool verbose, unsigned int seed=0 )
 {
   typedef TExecSpace execution_space;
   typedef TScalar scalar_t;
@@ -348,8 +348,10 @@ benchmark_range_spgemm_random( TOrdinal n, std::size_t nnz, bool verbose )
   typedef std::common_type_t< typename xcrsmatrix_t::size_type, uint64_t > size_type;
   typedef diverg::CRSMatrix< diverg::crs_matrix::RangeDynamic, bool, ordinal_t, size_type > range_crsmatrix_t;
 
+  std::cout << "Creating a random square matrix of order " << n << " with "
+            << nnz << " non-zero values (seed=" << seed << ")..." << std::endl;
   range_crsmatrix_t ra;
-  auto a = create_random_binary_matrix< xcrsmatrix_t >( n, nnz, ra );
+  auto a = create_random_binary_matrix< xcrsmatrix_t >( n, nnz, ra/*, seed*/ );  // TODO: pass seed
 
   if ( verbose ) diverg::print( a );
   //execution_space.fence();
