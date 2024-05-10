@@ -258,7 +258,7 @@ kokkos_kernels_power( TXCRSMatrix const& a, unsigned int n )
 
 template< typename TExecSpace=Kokkos::DefaultExecutionSpace,
           typename TAccumulator=HBitVectorAccumulator< 8192 >,
-          typename TOrdinal=int32_t, typename TScalar=signed char >
+          typename TOrdinal=int32_t, typename TScalar=int >
 void
 benchmark_range_spgemm_graph( const std::string& graph_path, int d,
                               bool verbose )
@@ -336,7 +336,7 @@ benchmark_range_spgemm_graph( const std::string& graph_path, int d,
 
 template< typename TExecSpace=Kokkos::DefaultExecutionSpace,
           typename TAccumulator=HBitVectorAccumulator< 8192 >,
-          typename TOrdinal=int32_t, typename TScalar=signed char >
+          typename TOrdinal=int32_t, typename TScalar=int >
 void
 benchmark_range_spgemm_random( TOrdinal n, std::size_t nnz, bool verbose )
 {
