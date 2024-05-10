@@ -345,9 +345,13 @@ benchmark_range_spgemm_random( TOrdinal n, std::size_t nnz, bool verbose )
   typedef TOrdinal ordinal_t;
   typedef typename execution_space::device_type device_t;
   typedef KokkosSparse::CrsMatrix< scalar_t, ordinal_t, device_t > xcrsmatrix_t;
+  typedef std::common_type_t< typename xcrsmatrix_t::size_type, uint64_t > size_type;
+  typedef diverg::CRSMatrix< diverg::crs_matrix::RangeDynamic, bool, ordinal_t, size_type > range_crsmatrix_t;
 
-  auto a = create_random_matrix_on_host< xcrsmatrix_t >( n, nnz );
-  diverg::print( a );
+  range_crsmatrix_t ra;
+  auto a = create_random_binary_matrix< xcrsmatrix_t >( n, nnz, ra );
+
+  if ( verbose ) diverg::print( a );
   //execution_space.fence();
   //range_crsmatrix_t rc;
   //range_spgemm( ra, ra );
