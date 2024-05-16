@@ -205,15 +205,15 @@ namespace diverg {
     typedef typename rcrsmatrix_t::spec_type rcrs_spec_type;
     typedef typename crs_matrix::Group< rcrs_spec_type >::type group_type;
 
+    static_assert( std::is_same< group_type, crs_matrix::RangeGroup >::value,
+                   "matrix should be in Range CRS format." );
+
     auto i_entries = rcrsmatrix_t::make_entries_device_view( space );
     auto i_rowmap = rcrsmatrix_t::make_rowmap_device_view( space );
 
     create_range_identity_matrix( i_rowmap, i_entries, n );
 
-    if constexpr ( std::is_same< group_type, crs_matrix::RangeGroup >::value )
-      return rcrsmatrix_t( n, i_entries, i_rowmap, n /* nnz */ );
-    else
-      return rcrsmatrix_t( n, i_entries, i_rowmap );
+    return rcrsmatrix_t( n, i_entries, i_rowmap, n /* nnz */ );
   }
 
   /**
