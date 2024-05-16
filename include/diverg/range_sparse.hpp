@@ -870,11 +870,13 @@ namespace diverg {
     range_spadd( handle, a_rowmap, a_entries, b_rowmap, b_entries, c_rowmap,
                  c_entries );
 
+    auto nnz = crs_matrix::nnz( c_entries, c_rowmap, crs_matrix::RangeGroup{} );
+
     // FIXME: since entries and rowmap arrays of range CRS is not a view, there
     // would be an extra copy here and the `c_entries` and `c_rowmap` cannot be
     // moved when the views are on the same memory space (the RCRS ctor does call
     // `deep_copy`).
-    return TRCRSMatrix( a.numCols(), c_entries, c_rowmap );
+    return TRCRSMatrix( a.numCols(), c_entries, c_rowmap, nnz );
   }
 
   /**
@@ -889,7 +891,7 @@ namespace diverg {
             typename TRowMapDeviceViewA, typename TEntriesDeviceViewA,
             typename TRowMapDeviceViewB, typename TEntriesDeviceViewB,
             typename TRowMapDeviceViewC, typename TExecGrid >
-  inline void
+  inline auto
   _range_spgemm_symbolic( const THandle&,
                           TRowMapDeviceViewA a_rowmap,
                           TEntriesDeviceViewA a_entries,
@@ -923,10 +925,11 @@ namespace diverg {
     Kokkos::Experimental::UniqueToken< execution_space > token;
     std::vector< btree_type > maps( token.size() );
     auto maps_ptr = &maps;
+    size_type nnz = 0;
 
-    Kokkos::parallel_for(
+    Kokkos::parallel_reduce(
         "diverg::crs_matrix::range_spgemm_symbolic::count_row_nnz",
-        policy_type( 0, a_nrows ), [=]( const uint64_t row ) {
+        policy_type( 0, a_nrows ), [=]( const uint64_t row, size_type& lnnz ) {
           auto a_idx = a_rowmap( row );
           auto a_end = a_rowmap( row + 1 );
           int id = token.acquire();
@@ -941,6 +944,7 @@ namespace diverg {
             }
           }
 
+          size_type r_nnz = 0;
           ordinal_type count = 0;
           if ( !acc.empty() ) {
             auto it = acc.begin();
@@ -953,10 +957,12 @@ namespace diverg {
                 hi = DIVERG_MACRO_MAX( hi, it->second );
                 continue;
               }
+              r_nnz += hi - lo + 1;
               lo = it->first;
               hi = it->second;
               count += 2;
             }
+            r_nnz += hi - lo + 1;
             count += 2;
             acc.clear();
           }
@@ -965,7 +971,8 @@ namespace diverg {
 
           c_rowmap( row + 1 ) = count;
           if ( row == 0 ) c_rowmap( 0 ) = 0;
-        } );
+          lnnz += r_nnz;
+        }, nnz );
 
     Kokkos::parallel_scan(
         "diverg::crs_matrix::range_spgemm_symbolic::computing_row_map_c",
@@ -977,6 +984,8 @@ namespace diverg {
           if ( final )
             c_rowmap( i + 1 ) = update;  // only update array on final pass
         } );
+
+    return nnz;
   }
 
   /**
@@ -1084,7 +1093,7 @@ namespace diverg {
             typename TRowMapDeviceViewB, typename TEntriesDeviceViewB,
             typename TRowMapDeviceViewC, typename TExecGrid,
             unsigned int TL1Size >
-  inline void
+  inline auto
   _range_spgemm_symbolic( const THandle& handle,
                           TRowMapDeviceViewA a_rowmap,
                           TEntriesDeviceViewA a_entries,
@@ -1130,18 +1139,20 @@ namespace diverg {
     auto policy = policy_type( nof_teams, team_size, vector_size );
     hbv_type::set_scratch_size( policy, b_ncols, part );
 
-    Kokkos::parallel_for(
+    size_type nnz = 0;
+    Kokkos::parallel_reduce(
         "diverg::crs_matrix::range_spgemm_symbolic::count_row_nnz", policy,
-        KOKKOS_LAMBDA( const member_type& tm ) {
+        KOKKOS_LAMBDA( const member_type& tm, size_type& lnnz ) {
           auto rank = tm.league_rank();
           size_type a_row = rank * work_size;
           size_type a_last_row = a_row + work_size;
           a_last_row = DIVERG_MACRO_MIN( a_last_row, a_nrows );
           hbv_type hbv( tm, b_ncols, part );
 
-          Kokkos::parallel_for(
+          size_type t_nnz = 0;  // team nnz
+          Kokkos::parallel_reduce(
               Kokkos::TeamThreadRange( tm, a_row, a_last_row ),
-              [&]( const uint64_t row ) {
+              [ & ]( const uint64_t row, size_type& lt_nnz ) {
                 auto a_idx = a_rowmap( row );
                 auto a_end = a_rowmap( row + 1 );
                 hbv.set_l1_position( row );
@@ -1149,6 +1160,7 @@ namespace diverg {
                 ordinal_type c_min = hbv.l1_begin_idx();
                 // max entry + 1 (bitset aligned) in the current `row` in C
                 ordinal_type c_max = c_min + hbv.l1_size();
+                size_type r_nnz = 0;
 
                 // Setting all L1 bitsets in `h_bv` to zero
                 hbv.clear_l1( tm, part );
@@ -1193,19 +1205,28 @@ namespace diverg {
                 ordinal_type count = 0;
                 Kokkos::parallel_reduce(
                     Kokkos::ThreadVectorRange( tm, c_lbs, c_rbs ),
-                    [=]( const uint64_t j, ordinal_type& local_count ) {
+                    [=]( const uint64_t j, ordinal_type& local_count,
+                           size_type& lr_nnz ) {
                       auto c
                           = ( j != c_lbs ) ? hbv_type::msb( hbv( j - 1 ) ) : 0;
-                      local_count += 2 * hbv_type::cnt01( hbv( j ), c );
+                      auto x = hbv( j );
+                      local_count += 2 * hbv_type::cnt01( x, c );
+                      lr_nnz += hbv_type::cnt( x );
                     },
-                    count );
+                    count, r_nnz );
 
-                Kokkos::single( Kokkos::PerThread( tm ), [=]() {
-                  c_rowmap( row + 1 ) = count;
-                  if ( row == 0 ) c_rowmap( 0 ) = 0;
-                } );
-              } );
-        } );
+                Kokkos::single( Kokkos::PerThread( tm ),
+                                [=, lt_nnz_ptr = &lt_nnz]() {
+                                  c_rowmap( row + 1 ) = count;
+                                  if ( row == 0 ) c_rowmap( 0 ) = 0;
+                                  *lt_nnz_ptr += r_nnz;
+                                } );
+              },
+              t_nnz );
+          Kokkos::single( Kokkos::PerTeam( tm ),
+                          [=, lnnz_ptr = &lnnz]() { *lnnz_ptr += t_nnz; } );
+        },
+        nnz );
 
     Kokkos::parallel_scan(
         "diverg::crs_matrix::range_spgemm_symbolic::computing_row_map_c", a_nrows,
@@ -1216,6 +1237,8 @@ namespace diverg {
           if ( final )
             c_rowmap( i + 1 ) = update;  // only update array on final pass
         } );
+
+    return nnz;
   }
 
   /**
@@ -1391,7 +1414,7 @@ namespace diverg {
             typename TRowMapDeviceViewB, typename TEntriesDeviceViewB,
             typename TRowMapDeviceViewC, typename TExecGrid,
             unsigned int TL1Size >
-  inline void
+  inline auto
   _range_spgemm_symbolic( const THandle& handle,
                           TRowMapDeviceViewA a_rowmap,
                           TEntriesDeviceViewA a_entries,
@@ -1437,9 +1460,10 @@ namespace diverg {
     auto policy = policy_type( a_nrows, team_size, vector_size );
     hbv_type::set_scratch_size( policy, b_ncols, part );
 
-    Kokkos::parallel_for(
+    size_type nnz = 0;
+    Kokkos::parallel_reduce(
         "diverg::crs_matrix::range_spgemm_symbolic::count_row_nnz", policy,
-        KOKKOS_LAMBDA( const member_type& tm ) {
+        KOKKOS_LAMBDA( const member_type& tm, size_type& lnnz ) {
           auto row = tm.league_rank();
           auto a_idx = a_rowmap( row );
           auto a_end = a_rowmap( row + 1 );
@@ -1448,6 +1472,7 @@ namespace diverg {
           ordinal_type c_min = hbv.l1_begin_idx();
           // max entry + 1 (bitset aligned) in the current `row` in C
           ordinal_type c_max = c_min + hbv.l1_size();
+          size_type r_nnz = 0;
 
           // Setting all L1 bitsets in `h_bv` to zero
           hbv.clear_l1( tm, part );
@@ -1502,17 +1527,21 @@ namespace diverg {
           ordinal_type count = 0;
           Kokkos::parallel_reduce(
               Kokkos::TeamVectorRange( tm, c_lbs, c_rbs ),
-              [=]( const uint64_t j, ordinal_type& local_count ) {
+              [=]( const uint64_t j, ordinal_type& local_count,
+                     size_type& lr_nnz ) {
                 auto c = ( j != c_lbs ) ? hbv_type::msb( hbv( j - 1 ) ) : 0;
-                local_count += 2 * hbv_type::cnt01( hbv( j ), c );
+                auto x = hbv( j );
+                local_count += 2 * hbv_type::cnt01( x, c );
+                lr_nnz += hbv_type::cnt( x );
               },
-              count );
+              count, r_nnz );
 
-          Kokkos::single( Kokkos::PerTeam( tm ), [=]() {
+          Kokkos::single( Kokkos::PerTeam( tm ), [=, lnnz_ptr = &lnnz]() {
             c_rowmap( row + 1 ) = count;
             if ( row == 0 ) c_rowmap( 0 ) = 0;
+            *lnnz_ptr += r_nnz;
           } );
-        } );
+        }, nnz );
 
     Kokkos::parallel_scan(
         "diverg::crs_matrix::range_spgemm_symbolic::computing_row_map_c", a_nrows,
@@ -1523,6 +1552,8 @@ namespace diverg {
           if ( final )
             c_rowmap( i + 1 ) = update;  // only update array on final pass
         } );
+
+    return nnz;
   }
 
   /**
@@ -1703,7 +1734,7 @@ namespace diverg {
             typename TRowMapDeviceViewB, typename TEntriesDeviceViewB,
             typename TRowMapDeviceViewC, typename TExecGrid,
             unsigned int TL1Size >
-  inline void
+  inline auto
   _range_spgemm_symbolic( const THandle& handle,
                           TRowMapDeviceViewA a_rowmap,
                           TEntriesDeviceViewA a_entries,
@@ -1747,9 +1778,10 @@ namespace diverg {
     auto policy = policy_type( a_nrows, team_size, vector_size );
     hbv_type::set_scratch_size( policy, b_ncols, part );
 
-    Kokkos::parallel_for(
+    size_type nnz = 0;
+    Kokkos::parallel_reduce(
         "diverg::crs_matrix::range_spgemm_symbolic::count_row_nnz", policy,
-        KOKKOS_LAMBDA( const member_type& tm ) {
+        KOKKOS_LAMBDA( const member_type& tm, size_type& lnnz ) {
           auto row = tm.league_rank();
           auto a_idx = a_rowmap( row );
           auto a_end = a_rowmap( row + 1 );
@@ -1834,19 +1866,24 @@ namespace diverg {
           auto c_lbs = hbv_type::bindex( c_min );
           auto c_rbs = hbv_type::bindex( c_max );
           ordinal_type count = 0;
+          size_type r_nnz = 0;
           Kokkos::parallel_reduce(
               Kokkos::TeamVectorRange( tm, c_lbs, c_rbs ),
-              [=]( const uint64_t j, ordinal_type& local_count ) {
+              [=]( const uint64_t j, ordinal_type& local_count,
+                   size_type& lr_nnz ) {
                 auto c = ( j != c_lbs ) ? hbv_type::msb( hbv( j - 1 ) ) : 0;
-                local_count += 2 * hbv_type::cnt01( hbv( j ), c );
+                auto x = hbv( j );
+                local_count += 2 * hbv_type::cnt01( x, c );
+                lr_nnz += hbv_type::cnt( x );
               },
-              count );
+              count, r_nnz );
 
-          Kokkos::single( Kokkos::PerTeam( tm ), [=]() {
+          Kokkos::single( Kokkos::PerTeam( tm ), [=, lnnz_ptr = &lnnz]() {
             c_rowmap( row + 1 ) = count;
             if ( row == 0 ) c_rowmap( 0 ) = 0;
+            *lnnz_ptr += r_nnz;
           } );
-        } );
+        }, nnz );
 
     Kokkos::parallel_scan(
         "diverg::crs_matrix::range_spgemm_symbolic::computing_row_map_c", a_nrows,
@@ -1857,6 +1894,8 @@ namespace diverg {
           if ( final )
             c_rowmap( i + 1 ) = update;  // only update array on final pass
         } );
+
+    return nnz;
   }
 
   /**
@@ -2059,7 +2098,7 @@ namespace diverg {
             typename TRowMapDeviceViewB, typename TEntriesDeviceViewB,
             typename TRowMapDeviceViewC, typename TExecGrid,
             unsigned int TL1Size >
-  inline void
+  inline auto
   _range_spgemm_symbolic( const THandle& handle,
                           TRowMapDeviceViewA a_rowmap,
                           TEntriesDeviceViewA a_entries,
@@ -2103,9 +2142,10 @@ namespace diverg {
     auto policy = policy_type( a_nrows, team_size, vector_size );
     hbv_type::set_scratch_size( policy, b_ncols, part );
 
-    Kokkos::parallel_for(
+    size_type nnz = 0;
+    Kokkos::parallel_reduce(
         "diverg::crs_matrix::range_spgemm_symbolic::count_row_nnz", policy,
-        KOKKOS_LAMBDA( const member_type& tm ) {
+        KOKKOS_LAMBDA( const member_type& tm, size_type& lnnz ) {
           auto row = tm.league_rank();
           auto a_idx = a_rowmap( row );
           auto a_end = a_rowmap( row + 1 );
@@ -2182,19 +2222,24 @@ namespace diverg {
           auto c_lbs = hbv_type::bindex( c_min );
           auto c_rbs = hbv_type::bindex( c_max );
           ordinal_type count = 0;
+          size_type r_nnz;
           Kokkos::parallel_reduce(
               Kokkos::TeamVectorRange( tm, c_lbs, c_rbs ),
-              [=]( const uint64_t j, ordinal_type& local_count ) {
+              [=]( const uint64_t j, ordinal_type& local_count,
+                   size_type& lr_nnz ) {
                 auto c = ( j != c_lbs ) ? hbv_type::msb( hbv( j - 1 ) ) : 0;
-                local_count += 2 * hbv_type::cnt01( hbv( j ), c );
+                auto x = hbv( j );
+                local_count += 2 * hbv_type::cnt01( x, c );
+                lr_nnz += hbv_type::cnt( x );
               },
-              count );
+              count, r_nnz );
 
-          Kokkos::single( Kokkos::PerTeam( tm ), [=]() {
+          Kokkos::single( Kokkos::PerTeam( tm ), [=, lnnz_ptr = &lnnz]() {
             c_rowmap( row + 1 ) = count;
             if ( row == 0 ) c_rowmap( 0 ) = 0;
+            *lnnz_ptr += r_nnz;
           } );
-        } );
+        }, nnz );
 
     Kokkos::parallel_scan(
         "diverg::crs_matrix::range_spgemm_symbolic::computing_row_map_c", a_nrows,
@@ -2205,6 +2250,8 @@ namespace diverg {
           if ( final )
             c_rowmap( i + 1 ) = update;  // only update array on final pass
         } );
+
+    return nnz;
   }
 
   /**
@@ -2391,7 +2438,7 @@ namespace diverg {
             typename TRowMapDeviceViewB, typename TEntriesDeviceViewB,
             typename TRowMapDeviceViewC,
             typename TSparseConfig=DefaultSparseConfiguration >
-  inline void
+  inline auto
   range_spgemm_symbolic( const THandle& handle,
                          TRowMapDeviceViewA a_rowmap,
                          TEntriesDeviceViewA a_entries,
@@ -2409,8 +2456,9 @@ namespace diverg {
     DIVERG_ASSERT( handle.a_ncols <= std::numeric_limits< ordinal_type >::max() - 1 );
     DIVERG_ASSERT( handle.b_ncols <= std::numeric_limits< ordinal_type >::max() - 1 );
 
-    _range_spgemm_symbolic( handle, a_rowmap, a_entries, b_rowmap, b_entries,
-                            c_rowmap, config.grid, config.part, config.accm );
+    return _range_spgemm_symbolic( handle, a_rowmap, a_entries, b_rowmap,
+                                   b_entries, c_rowmap, config.grid,
+                                   config.part, config.accm );
   }
 
   template< typename THandle,
@@ -2450,7 +2498,7 @@ namespace diverg {
             typename TRowMapDeviceViewC, typename TEntriesDeviceViewC,
             typename TSparseConfig=DefaultSparseConfiguration,
             typename TTimer = Kokkos::Timer >
-  inline void
+  inline auto
   range_spgemm( const THandle& handle,
                 TRowMapDeviceViewA a_rowmap, TEntriesDeviceViewA a_entries,
                 TRowMapDeviceViewB b_rowmap, TEntriesDeviceViewB b_entries,
@@ -2476,8 +2524,8 @@ namespace diverg {
     if ( timer_ptr ) timer_ptr->reset();
 #endif
 
-    range_spgemm_symbolic( handle, a_rowmap, a_entries, b_rowmap, b_entries,
-                           c_rowmap, config );
+    auto nnz = range_spgemm_symbolic( handle, a_rowmap, a_entries, b_rowmap,
+                                      b_entries, c_rowmap, config );
 
 #ifdef DIVERG_STATS
     if ( timer_ptr ) {
@@ -2508,6 +2556,8 @@ namespace diverg {
                 << std::endl;
     }
 #endif
+
+    return nnz;
   }
 
   template< typename TRCRSMatrix,
@@ -2535,14 +2585,14 @@ namespace diverg {
 
     SparseRangeHandle handle( a, b );
 
-    range_spgemm( handle, a_rowmap, a_entries, b_rowmap, b_entries, c_rowmap,
-                  c_entries, config );
+    auto nnz = range_spgemm( handle, a_rowmap, a_entries, b_rowmap, b_entries,
+                             c_rowmap, c_entries, config );
 
     // FIXME: since entries and rowmap arrays of range CRS is not a view, there
     // would be an extra copy here and the `c_entries` and `c_rowmap` cannot be
     // moved when the views are on the same memory space (the RCRS ctor does call
     // `deep_copy`).
-    return TRCRSMatrix( b.numCols(), c_entries, c_rowmap );
+    return TRCRSMatrix( b.numCols(), c_entries, c_rowmap, nnz );
   }
 
   template< typename TRCRSMatrix,

@@ -527,6 +527,12 @@ TEMPLATE_SCENARIO_SIG( "Validation and verification of range SpGEMM", "[range_sp
       auto xc = kokkos_kernels_spgemm( xrand_mat, xrand_mat );
       auto rc = range_spgemm( rrand_mat, rrand_mat, config_type{} );
       REQUIRE( is_same( xc, rc ) );
+
+      execution_space space;
+      auto entr = rc.entries_device_view( space );
+      auto rwmp = rcrsmatrix_t::make_rowmap_device_view( space );
+      auto nnz = crs_matrix::nnz( entr, rwmp, crs_matrix::RangeGroup{} );
+      REQUIRE( nnz == rc.nnz() );
     }
   }
 
@@ -547,6 +553,12 @@ TEMPLATE_SCENARIO_SIG( "Validation and verification of range SpGEMM", "[range_sp
       auto xc = kokkos_kernels_spgemm( a, a );
       auto rc = range_spgemm( ra, ra, config_type{} );
       REQUIRE( is_same( xc, rc ) );
+
+      execution_space space;
+      auto entr = rc.entries_device_view( space );
+      auto rwmp = rcrsmatrix_t::make_rowmap_device_view( space );
+      auto nnz = crs_matrix::nnz( entr, rwmp, crs_matrix::RangeGroup{} );
+      REQUIRE( nnz == rc.nnz() );
     }
   }
 }
@@ -583,6 +595,12 @@ TEMPLATE_SCENARIO_SIG( "Validation and verification of range power", "[range_spa
       auto xc = kokkos_kernels_power( xrand_mat, K );
       auto rc = range_power( rrand_mat, K, config_type{} );
       REQUIRE( is_same( xc, rc ) );
+
+      execution_space space;
+      auto entr = rc.entries_device_view( space );
+      auto rwmp = rcrsmatrix_t::make_rowmap_device_view( space );
+      auto nnz = crs_matrix::nnz( entr, rwmp, crs_matrix::RangeGroup{} );
+      REQUIRE( nnz == rc.nnz() );
     }
   }
 
@@ -603,6 +621,12 @@ TEMPLATE_SCENARIO_SIG( "Validation and verification of range power", "[range_spa
       auto xc = kokkos_kernels_power( a, K );
       auto rc = range_power( ra, K, config_type{} );
       REQUIRE( is_same( xc, rc ) );
+
+      execution_space space;
+      auto entr = rc.entries_device_view( space );
+      auto rwmp = rcrsmatrix_t::make_rowmap_device_view( space );
+      auto nnz = crs_matrix::nnz( entr, rwmp, crs_matrix::RangeGroup{} );
+      REQUIRE( nnz == rc.nnz() );
     }
   }
 }
@@ -639,6 +663,12 @@ TEMPLATE_SCENARIO_SIG( "Validation and verification of range SpAdd", "[range_spa
       auto xc = kokkos_kernels_spadd( xrand_mat1, xrand_mat2 );
       auto rc = range_spadd( rrand_mat1, rrand_mat2 );
       REQUIRE( is_same( xc, rc ) );
+
+      execution_space space;
+      auto entr = rc.entries_device_view( space );
+      auto rwmp = rcrsmatrix_t::make_rowmap_device_view( space );
+      auto nnz = crs_matrix::nnz( entr, rwmp, crs_matrix::RangeGroup{} );
+      REQUIRE( nnz == rc.nnz() );
     }
   }
 
@@ -662,6 +692,12 @@ TEMPLATE_SCENARIO_SIG( "Validation and verification of range SpAdd", "[range_spa
       auto xc = kokkos_kernels_spadd( a, I );
       auto rc = range_spadd( ra, rI );
       REQUIRE( is_same( xc, rc ) );
+
+      execution_space space;
+      auto entr = rc.entries_device_view( space );
+      auto rwmp = rcrsmatrix_t::make_rowmap_device_view( space );
+      auto nnz = crs_matrix::nnz( entr, rwmp, crs_matrix::RangeGroup{} );
+      REQUIRE( nnz == rc.nnz() );
     }
   }
 }
