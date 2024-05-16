@@ -9,6 +9,7 @@ option(BUILD_HEADERS_ONLY "Configure as header-only library" OFF)
 option(DIVERG_ENABLE_OPENMP "Enable OpenMP as host execution space" ON)
 option(DIVERG_ENABLE_CUDA "Enable CUDA as device execution space" OFF)
 option(DIVERG_STRICT_ON_WARNS "Pass '-Werror' flag to compiler" ON)
+option(DIVERG_STATS "Enable statistics collection" OFF)
 option(USE_BUNDLED_KOKKOS "Use bundled Kokkos" OFF)
 option(USE_BUNDLED_KOKKOS_KERNELS "Use bundled KokkosKernels" OFF)
 option(USE_BUNDLED_GUM "Use bundled gum library" OFF)
@@ -67,6 +68,11 @@ target_link_libraries(libdiverg_headers
   INTERFACE $<BUILD_INTERFACE:Kokkos::kokkoskernels>;$<INSTALL_INTERFACE:Kokkos::kokkoskernels>)
 # Use C++14
 target_compile_features(libdiverg_headers INTERFACE cxx_std_14)
+
+# Define `DIVERG_STATS`
+if(DIVERG_STATS)
+  target_compile_definitions(libdiverg_headers INTERFACE DIVERG_STATS)
+endif(DIVERG_STATS)
 
 # Generating the configure header file
 configure_file(include/diverg/config.hpp.in ${PROJECT_SOURCE_DIR}/include/diverg/config.hpp @ONLY)

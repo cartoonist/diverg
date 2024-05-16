@@ -326,7 +326,8 @@ is_same( TXCRSMatrix& x_mat, TRCRSMatrix& r_mat )
 
 template< typename TXCRSMatrix >
 inline TXCRSMatrix
-kokkos_kernels_spgemm( TXCRSMatrix const& a, TXCRSMatrix const& b )
+kokkos_kernels_spgemm( TXCRSMatrix const& a, TXCRSMatrix const& b,
+                       Kokkos::Timer* timer_ptr = nullptr )
 {
   typedef typename TXCRSMatrix::ordinal_type ordinal_t;
   typedef typename TXCRSMatrix::size_type size_type;
@@ -351,31 +352,35 @@ kokkos_kernels_spgemm( TXCRSMatrix const& a, TXCRSMatrix const& b )
 
   {
 #ifdef DIVERG_STATS
-    Kokkos::Timer timer;
+    if ( timer_ptr ) timer_ptr->reset();
 #endif
 
     KokkosSparse::spgemm_symbolic( handle, a, false, b, false, c );
-    execution_space{}.fence();
 
 #ifdef DIVERG_STATS
-    auto duration = timer.seconds();
-    std::cout << "Kokkos::SpGEMM_symbolic time: " << duration * 1000 << "ms"
-              << std::endl;
+    if ( timer_ptr ) {
+      execution_space{}.fence();
+      auto duration = timer_ptr->seconds();
+      std::cout << "Kokkos::SpGEMM_symbolic time: " << duration * 1000 << "ms"
+                << std::endl;
+    }
 #endif
   }
 
   {
 #ifdef DIVERG_STATS
-    Kokkos::Timer timer;
+    if ( timer_ptr ) timer_ptr->reset();
 #endif
 
     KokkosSparse::spgemm_numeric( handle, a, false, b, false, c );
-    execution_space{}.fence();
 
 #ifdef DIVERG_STATS
-    auto duration = timer.seconds();
-    std::cout << "Kokkos::SpGEMM_numeric time: " << duration * 1000 << "ms"
-              << std::endl;
+    if ( timer_ptr ) {
+      execution_space{}.fence();
+      auto duration = timer_ptr->seconds();
+      std::cout << "Kokkos::SpGEMM_numeric time: " << duration * 1000 << "ms"
+                << std::endl;
+    }
 #endif
   }
 
@@ -393,7 +398,8 @@ kokkos_kernels_spgemm( TXCRSMatrix const& a, TXCRSMatrix const& b )
 
 template< typename TXCRSMatrix >
 inline TXCRSMatrix
-kokkos_kernels_spadd( TXCRSMatrix const& a, TXCRSMatrix const& b )
+kokkos_kernels_spadd( TXCRSMatrix const& a, TXCRSMatrix const& b,
+                      Kokkos::Timer* timer_ptr = nullptr )
 {
   typedef typename TXCRSMatrix::ordinal_type ordinal_t;
   typedef typename TXCRSMatrix::size_type size_type;
@@ -411,31 +417,35 @@ kokkos_kernels_spadd( TXCRSMatrix const& a, TXCRSMatrix const& b )
 
   {
 #ifdef DIVERG_STATS
-    Kokkos::Timer timer;
+    if ( timer_ptr ) timer_ptr->reset();
 #endif
 
     KokkosSparse::spadd_symbolic( &handle, a, b, c );
-    execution_space{}.fence();
 
 #ifdef DIVERG_STATS
-    auto duration = timer.seconds();
-    std::cout << "Kokkos::SpAdd_symbolic time: " << duration * 1000 << "ms"
-              << std::endl;
+    if ( timer_ptr ) {
+      execution_space{}.fence();
+      auto duration = timer_ptr->seconds();
+      std::cout << "Kokkos::SpAdd_symbolic time: " << duration * 1000 << "ms"
+                << std::endl;
+    }
 #endif
   }
 
   {
 #ifdef DIVERG_STATS
-    Kokkos::Timer timer;
+    if ( timer_ptr ) timer_ptr->reset();
 #endif
 
     KokkosSparse::spadd_numeric( &handle, 1, a, 1, b, c );
-    execution_space{}.fence();
 
 #ifdef DIVERG_STATS
-    auto duration = timer.seconds();
-    std::cout << "Kokkos::SpGEMM_numeric time: " << duration * 1000 << "ms"
-              << std::endl;
+    if ( timer_ptr ) {
+      execution_space{}.fence();
+      auto duration = timer_ptr->seconds();
+      std::cout << "Kokkos::SpGEMM_numeric time: " << duration * 1000 << "ms"
+                << std::endl;
+    }
 #endif
   }
 
@@ -453,12 +463,15 @@ kokkos_kernels_spadd( TXCRSMatrix const& a, TXCRSMatrix const& b )
 
 template< typename TXCRSMatrix >
 inline TXCRSMatrix
-kokkos_kernels_power( TXCRSMatrix const& a, unsigned int n )
+kokkos_kernels_power( TXCRSMatrix const& a, unsigned int n,
+                      Kokkos::Timer* timer_ptr = nullptr )
 {
+  using execution_space = typename TXCRSMatrix::execution_space;
+
   assert( a.numRows() == a.numCols() );
 
 #ifdef DIVERG_STATS
-  Kokkos::Timer timer;
+  if ( timer_ptr ) timer_ptr->reset();
 #endif
   auto c = create_identity_matrix< TXCRSMatrix >( a.numRows() );
   auto a_copy = a;
@@ -470,12 +483,13 @@ kokkos_kernels_power( TXCRSMatrix const& a, unsigned int n )
     a_copy = kokkos_kernels_spgemm( a_copy, a_copy );
   }
 
-  typename TXCRSMatrix::execution_space{}.fence();
-
 #ifdef DIVERG_STATS
-  auto duration = timer.seconds();
-  std::cout << "KokkosKernels::power time: " << duration * 1000 << "ms"
-            << std::endl;
+  if ( timer_ptr ) {
+    execution_space{}.fence();
+    auto duration = timer_ptr->seconds();
+    std::cout << "KokkosKernels::power time: " << duration * 1000 << "ms"
+              << std::endl;
+  }
 #endif
 
   return c;

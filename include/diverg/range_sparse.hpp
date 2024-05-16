@@ -785,17 +785,20 @@ namespace diverg {
   template< typename THandle,
             typename TRowMapDeviceViewA, typename TEntriesDeviceViewA,
             typename TRowMapDeviceViewB, typename TEntriesDeviceViewB,
-            typename TRowMapDeviceViewC, typename TEntriesDeviceViewC >
+            typename TRowMapDeviceViewC, typename TEntriesDeviceViewC,
+            typename TTimer = Kokkos::Timer >
   inline void
   range_spadd( const THandle& handle,
                TRowMapDeviceViewA a_rowmap, TEntriesDeviceViewA a_entries,
                TRowMapDeviceViewB b_rowmap, TEntriesDeviceViewB b_entries,
-               TRowMapDeviceViewC& c_rowmap, TEntriesDeviceViewC& c_entries )
+               TRowMapDeviceViewC& c_rowmap, TEntriesDeviceViewC& c_entries,
+               TTimer* timer_ptr = nullptr )
   {
     typedef TEntriesDeviceViewC c_entries_type;
     typedef TRowMapDeviceViewC  c_row_map_type;
     typedef typename c_entries_type::value_type ordinal_type;
     typedef typename c_row_map_type::value_type size_type;
+    typedef typename c_row_map_type::execution_space execution_space;
 
     assert( handle.a_ncols == handle.b_ncols );
     assert( a_rowmap.extent( 0 ) == b_rowmap.extent( 0 ) );
@@ -806,16 +809,19 @@ namespace diverg {
         a_rowmap.extent( 0 ) );
 
 #ifdef DIVERG_STATS
-    Kokkos::Timer timer;
+    if ( timer_ptr ) timer_ptr->reset();
 #endif
 
     range_spadd_symbolic( handle, a_rowmap, a_entries, b_rowmap, b_entries,
                           c_rowmap );
 
 #ifdef DIVERG_STATS
-    double d = timer.seconds();
-    std::cout << "diverg::range_spadd_symbolic time: " << d * 1000 << "ms"
-              << std::endl;
+    if ( timer_ptr ) {
+      execution_space{}.fence();
+      auto d = timer_ptr->seconds();
+      std::cout << "diverg::range_spadd_symbolic time: " << d * 1000 << "ms"
+                << std::endl;
+    }
 #endif
 
     size_type c_rnnz;
@@ -824,31 +830,32 @@ namespace diverg {
                                 c_rnnz );
 
 #ifdef DIVERG_STATS
-    timer.reset();
+    if ( timer_ptr ) timer_ptr->reset();
 #endif
 
     range_spadd_numeric( handle, a_rowmap, a_entries, b_rowmap, b_entries,
                          c_rowmap, c_entries );
 
 #ifdef DIVERG_STATS
-    d = timer.seconds();
-    std::cout << "diverg::range_spadd_numeric time: " << d * 1000 << "ms"
-              << std::endl;
+    if ( timer_ptr ) {
+      execution_space{}.fence();
+      auto d = timer_ptr->seconds();
+      std::cout << "diverg::range_spadd_numeric time: " << d * 1000 << "ms"
+                << std::endl;
+    }
 #endif
   }
 
   template< typename TRCRSMatrix,
-            typename TExecSpace=Kokkos::DefaultExecutionSpace >
+            typename TExecSpace = Kokkos::DefaultExecutionSpace >
   inline TRCRSMatrix
-  range_spadd( TRCRSMatrix const& a, TRCRSMatrix const& b )
+  range_spadd( TRCRSMatrix const& a, TRCRSMatrix const& b,
+               TExecSpace space = {} )
   {
     typedef TRCRSMatrix range_crsmatrix_t;
-    typedef TExecSpace execution_space;
 
     assert( a.numCols() == b.numCols() );
     assert( a.numRows() == b.numRows() );
-
-    execution_space space{};
 
     auto a_entries = a.entries_device_view( space );
     auto a_rowmap = a.rowmap_device_view( space );
@@ -2441,13 +2448,15 @@ namespace diverg {
             typename TRowMapDeviceViewA, typename TEntriesDeviceViewA,
             typename TRowMapDeviceViewB, typename TEntriesDeviceViewB,
             typename TRowMapDeviceViewC, typename TEntriesDeviceViewC,
-            typename TSparseConfig=DefaultSparseConfiguration >
+            typename TSparseConfig=DefaultSparseConfiguration,
+            typename TTimer = Kokkos::Timer >
   inline void
   range_spgemm( const THandle& handle,
                 TRowMapDeviceViewA a_rowmap, TEntriesDeviceViewA a_entries,
                 TRowMapDeviceViewB b_rowmap, TEntriesDeviceViewB b_entries,
                 TRowMapDeviceViewC& c_rowmap, TEntriesDeviceViewC& c_entries,
-                TSparseConfig config={} )
+                TSparseConfig config={},
+                TTimer* timer_ptr = nullptr )
   {
     typedef TEntriesDeviceViewC c_entries_type;
     typedef TRowMapDeviceViewC  c_row_map_type;
@@ -2464,16 +2473,19 @@ namespace diverg {
         a_rowmap.extent( 0 ) );
 
 #ifdef DIVERG_STATS
-    Kokkos::Timer timer;
+    if ( timer_ptr ) timer_ptr->reset();
 #endif
 
     range_spgemm_symbolic( handle, a_rowmap, a_entries, b_rowmap, b_entries,
                            c_rowmap, config );
 
 #ifdef DIVERG_STATS
-    double d = timer.seconds();
-    std::cout << "diverg::range_spgemm_symbolic time: " << d * 1000 << "ms"
-              << std::endl;
+    if ( timer_ptr ) {
+      config.space.fence();
+      auto d = timer_ptr->seconds();
+      std::cout << "diverg::range_spgemm_symbolic time: " << d * 1000 << "ms"
+                << std::endl;
+    }
 #endif
 
     size_type c_rnnz;
@@ -2482,16 +2494,19 @@ namespace diverg {
                                 c_rnnz );
 
 #ifdef DIVERG_STATS
-    timer.reset();
+    if ( timer_ptr ) timer_ptr->reset();
 #endif
 
     range_spgemm_numeric( handle, a_rowmap, a_entries, b_rowmap, b_entries,
                           c_rowmap, c_entries, config );
 
 #ifdef DIVERG_STATS
-    d = timer.seconds();
-    std::cout << "diverg::range_spgemm_numeric time: " << d * 1000 << "ms"
-              << std::endl;
+    if ( timer_ptr ) {
+      config.space.fence();
+      auto d = timer_ptr->seconds();
+      std::cout << "diverg::range_spgemm_numeric time: " << d * 1000 << "ms"
+                << std::endl;
+    }
 #endif
   }
 
@@ -2531,28 +2546,30 @@ namespace diverg {
   }
 
   template< typename TRCRSMatrix,
-            typename TSparseConfig=DefaultSparseConfiguration >
+            typename TSparseConfig = DefaultSparseConfiguration,
+            typename TTimer = Kokkos::Timer >
   inline TRCRSMatrix
-  range_power( TRCRSMatrix const& a, unsigned int k, TSparseConfig config={} )
+  range_power( TRCRSMatrix const& a, unsigned int k, TSparseConfig config = {},
+               TTimer* timer_ptr = nullptr )
   {
     typedef TRCRSMatrix rcrsmatrix_t;
     //typedef TSparseConfig config_type;
     //typedef typename config_type::execution_space execution_space;
-
-#ifdef DIVERG_STATS
-  Kokkos::Timer timer;
-#endif
-
-    auto c_entries = rcrsmatrix_t::make_entries_device_view( config.space );
-    auto c_rowmap = rcrsmatrix_t::make_rowmap_device_view( config.space );
-
-    create_range_identity_matrix( c_rowmap, c_entries, a.numRows() );
 
     auto a2n_entries = a.entries_device_view( config.space );
     auto a2n_rowmap = a.rowmap_device_view( config.space );
 
     auto tmp_entries = rcrsmatrix_t::make_entries_device_view( config.space );
     auto tmp_rowmap = rcrsmatrix_t::make_rowmap_device_view( config.space );
+
+    auto c_entries = rcrsmatrix_t::make_entries_device_view( config.space );
+    auto c_rowmap = rcrsmatrix_t::make_rowmap_device_view( config.space );
+
+#ifdef DIVERG_STATS
+    if ( timer_ptr ) timer_ptr->reset();
+#endif
+
+    create_range_identity_matrix( c_rowmap, c_entries, a.numRows() );
 
     SparseRangeHandle handle( a, a );
 
@@ -2576,9 +2593,12 @@ namespace diverg {
     }
 
 #ifdef DIVERG_STATS
-    auto duration = timer.seconds();
-    std::cout << "range_power time: " << duration * 1000 << "ms"
-              << std::endl;
+    if ( timer_ptr ) {
+      config.space.fence();
+      auto duration = timer_ptr->seconds();
+      std::cout << "range_power time: " << duration * 1000 << "ms"
+                << std::endl;
+    }
 #endif
 
     return TRCRSMatrix( a.numCols(), c_entries, c_rowmap );

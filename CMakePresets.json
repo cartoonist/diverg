@@ -14,14 +14,23 @@
                 "CMAKE_CXX_STANDARD": "17",
                 "USE_BUNDLED_ALL": true,
                 "BUILD_TESTING": true,
-                "BUILD_BENCHMARKING": true
+            }
+        },
+        {
+            "name": "benchmark-base",
+            "displayName": "Configuration for benchmarking (all)",
+            "description": "Configuration for benchmarking including all targets",
+            "inherits": "base-all",
+            "cacheVariables": {
+                "BUILD_BENCHMARKING": true,
+                "DIVERG_STATS": true
             }
         },
         {
             "name": "default-debug-all-omp",
             "displayName": "Debug configuration for OpenMP",
             "description": "Debug build for OpenMP using default generator",
-            "inherits": "base-all",
+            "inherits": "benchmark-base",
             "binaryDir": "${sourceDir}/build/Debug",
             "cacheVariables": {
                 "CMAKE_BUILD_TYPE": "Debug",
@@ -55,10 +64,28 @@
             "generator": "Ninja"
         },
         {
+            "name": "default-benchmark-all-omp",
+            "displayName": "Benchmark configuration for OpenMP",
+            "description": "Benchmark build for OpenMP using default generator",
+            "inherits": "benchmark-base",
+            "binaryDir": "${sourceDir}/build/Benchmark",
+            "cacheVariables": {
+                "CMAKE_BUILD_TYPE": "Release",
+                "DIVERG_ENABLE_OPENMP": true
+            }
+        },
+        {
+            "name": "ninja-benchmark-all-omp",
+            "displayName": "Benchmark configuration for OpenMP (Ninja)",
+            "description": "Benchmark build for OpenMP using Ninja generator",
+            "inherits": "default-benchmark-all-omp",
+            "generator": "Ninja"
+        },
+        {
             "name": "default-debug-all-cuda",
             "displayName": "Debug configuration for Cuda",
             "description": "Debug build for Cuda using default generator",
-            "inherits": "base-all",
+            "inherits": "benchmark-base",
             "binaryDir": "${sourceDir}/build/DebugCuda",
             "cacheVariables": {
                 "CMAKE_BUILD_TYPE": "Debug",
@@ -91,6 +118,25 @@
             "displayName": "Release configuration for Cuda (Ninja)",
             "description": "Release build for Cuda using Ninja generator",
             "inherits": "default-release-all-cuda",
+            "generator": "Ninja"
+        },
+        {
+            "name": "default-benchmark-all-cuda",
+            "displayName": "Benchmark configuration for Cuda",
+            "description": "Benchmark build for Cuda using default generator",
+            "inherits": "benchmark-base",
+            "binaryDir": "${sourceDir}/build/BenchmarkCuda",
+            "cacheVariables": {
+                "CMAKE_BUILD_TYPE": "Release",
+                "DIVERG_ENABLE_CUDA": true,
+                "DIVERG_ENABLE_OPENMP": true
+            }
+        },
+        {
+            "name": "ninja-benchmark-all-cuda",
+            "displayName": "Benchmark configuration for Cuda (Ninja)",
+            "description": "Benchmark build for Cuda using Ninja generator",
+            "inherits": "default-benchmark-all-cuda",
             "generator": "Ninja"
         }
     ]
