@@ -13,7 +13,7 @@
             "cacheVariables": {
                 "CMAKE_CXX_STANDARD": "17",
                 "USE_BUNDLED_ALL": true,
-                "BUILD_TESTING": true,
+                "BUILD_TESTING": true
             }
         },
         {
