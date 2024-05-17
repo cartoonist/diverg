@@ -891,7 +891,7 @@ namespace diverg {
             typename TRowMapDeviceViewA, typename TEntriesDeviceViewA,
             typename TRowMapDeviceViewB, typename TEntriesDeviceViewB,
             typename TRowMapDeviceViewC, typename TExecGrid >
-  inline auto
+  inline typename TRowMapDeviceViewC::value_type /* size_type */
   _range_spgemm_symbolic( const THandle&,
                           TRowMapDeviceViewA a_rowmap,
                           TEntriesDeviceViewA a_entries,
@@ -1093,7 +1093,7 @@ namespace diverg {
             typename TRowMapDeviceViewB, typename TEntriesDeviceViewB,
             typename TRowMapDeviceViewC, typename TExecGrid,
             unsigned int TL1Size >
-  inline auto
+  inline typename TRowMapDeviceViewC::value_type /* size_type */
   _range_spgemm_symbolic( const THandle& handle,
                           TRowMapDeviceViewA a_rowmap,
                           TEntriesDeviceViewA a_entries,
@@ -1414,7 +1414,7 @@ namespace diverg {
             typename TRowMapDeviceViewB, typename TEntriesDeviceViewB,
             typename TRowMapDeviceViewC, typename TExecGrid,
             unsigned int TL1Size >
-  inline auto
+  inline typename TRowMapDeviceViewC::value_type /* size_type */
   _range_spgemm_symbolic( const THandle& handle,
                           TRowMapDeviceViewA a_rowmap,
                           TEntriesDeviceViewA a_entries,
@@ -1734,7 +1734,7 @@ namespace diverg {
             typename TRowMapDeviceViewB, typename TEntriesDeviceViewB,
             typename TRowMapDeviceViewC, typename TExecGrid,
             unsigned int TL1Size >
-  inline auto
+  inline typename TRowMapDeviceViewC::value_type /* size_type */
   _range_spgemm_symbolic( const THandle& handle,
                           TRowMapDeviceViewA a_rowmap,
                           TEntriesDeviceViewA a_entries,
@@ -2098,7 +2098,7 @@ namespace diverg {
             typename TRowMapDeviceViewB, typename TEntriesDeviceViewB,
             typename TRowMapDeviceViewC, typename TExecGrid,
             unsigned int TL1Size >
-  inline auto
+  inline typename TRowMapDeviceViewC::value_type /* size_type */
   _range_spgemm_symbolic( const THandle& handle,
                           TRowMapDeviceViewA a_rowmap,
                           TEntriesDeviceViewA a_entries,
@@ -2438,7 +2438,7 @@ namespace diverg {
             typename TRowMapDeviceViewB, typename TEntriesDeviceViewB,
             typename TRowMapDeviceViewC,
             typename TSparseConfig=DefaultSparseConfiguration >
-  inline auto
+  inline typename TRowMapDeviceViewC::value_type /* size_type */
   range_spgemm_symbolic( const THandle& handle,
                          TRowMapDeviceViewA a_rowmap,
                          TEntriesDeviceViewA a_entries,
@@ -2498,7 +2498,7 @@ namespace diverg {
             typename TRowMapDeviceViewC, typename TEntriesDeviceViewC,
             typename TSparseConfig=DefaultSparseConfiguration,
             typename TTimer = Kokkos::Timer >
-  inline auto
+  inline typename TRowMapDeviceViewC::value_type /* size_type */
   range_spgemm( const THandle& handle,
                 TRowMapDeviceViewA a_rowmap, TEntriesDeviceViewA a_entries,
                 TRowMapDeviceViewB b_rowmap, TEntriesDeviceViewB b_entries,
