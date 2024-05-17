@@ -23,6 +23,8 @@
 
 #include <gum/graph.hpp>
 
+#include "range_sparse.hpp"
+
 
 namespace diverg {
   namespace util {
@@ -279,6 +281,151 @@ namespace diverg {
       assert( start == dindex.nnz() );
 
       return crsmat_mutable_type( dindex.numCols(), std::move( entries ), std::move( rowmap ) );
+    }
+
+    /**
+     *  @brief  Create a distance index for a graph by its adjacency matrix.
+     *
+     *  @param  ra     The adjacency matrix of the graph in CRS Range foramt.
+     *  @param  dlo    The lower bound of distance constraint.
+     *  @param  dup    The upper bound of distance constraint.
+     *  @return A RCRS matrix representing the distance index.
+     *
+     *  NOTE: This method assumes that the input graph is sorted such that node
+     *  rank ranges in components are disjoint.
+     *
+     *  NOTE: The input adjacency matrix should be in Range CRS format.
+     */
+    template< typename TRCRSMatrix,
+              typename TSparseConfig = DefaultSparseConfiguration,
+              typename TTimer = Kokkos::Timer >
+    inline TRCRSMatrix
+    create_distance_index( TRCRSMatrix const& ra, unsigned int dlo,
+                           unsigned int dup, TSparseConfig config = {},
+                           /* measures whole body minus host<->device copies */
+                           TTimer* timer1_ptr = nullptr,
+                           /* measures individual operations */
+                           TTimer* timer2_ptr = nullptr )
+    {
+      using rcrsmatrix_t = TRCRSMatrix;
+      using config_type = TSparseConfig;
+      using execution_space = typename config_type::execution_space;
+      using handle_t = SparseRangeHandle< TRCRSMatrix >;
+      using size_type = typename rcrsmatrix_t::size_type;
+      using rcrs_spec_type = typename rcrsmatrix_t::rcrs_spec_type;
+      using group_type = typename crs_matrix::Group< rcrs_spec_type >::type;
+
+      static_assert( std::is_same< group_type, crs_matrix::RangeGroup >::value,
+                     "matrix should be in Range CRS format." );
+
+      DIVERG_ASSERT( dlo <= dup && dup != 0 );
+      assert( ra.numCols() == ra.numRows() );
+
+      execution_space space;
+
+      auto nrows = ra.numRows();
+      auto ncols = ra.numCols();
+
+      // rA^dlo . (rA + rI)^(dup - dlo) (device)
+      auto d_entries = rcrsmatrix_t::make_entries_device_view( space );
+      auto d_rowmap = rcrsmatrix_t::make_rowmap_device_view( space );
+      size_type d_nnz = 0;
+
+      {
+        // (rA + rI)^(dup - dlo) (device)
+        auto raid_entries = rcrsmatrix_t::make_entries_device_view( space );
+        auto raid_rowmap = rcrsmatrix_t::make_rowmap_device_view( space );
+        size_type raid_nnz = 0;
+
+        // rA^dlo (device)
+        auto rad_entries = rcrsmatrix_t::make_entries_device_view( space );
+        auto rad_rowmap = rcrsmatrix_t::make_rowmap_device_view( space );
+        size_type rad_nnz = 0;
+
+        {
+          // rA + rI (device)
+          auto rai_entries = rcrsmatrix_t::make_entries_device_view( space );
+          auto rai_rowmap = rcrsmatrix_t::make_rowmap_device_view( space );
+          size_type rai_nnz = 0;
+
+          {
+            // rA (device)
+            auto ra_entries = ra.entries_device_view( space );
+            auto ra_rowmap = ra.rowmap_device_view( space );
+
+            {
+              // rI (device)
+              auto i_entries = rcrsmatrix_t::make_entries_device_view( space );
+              auto i_rowmap = rcrsmatrix_t::make_rowmap_device_view( space );
+#ifdef DIVERG_STATS
+              if ( timer1_ptr ) timer1_ptr->reset();
+              if ( timer2_ptr ) timer2_ptr->reset();
+#endif
+              // Computing rI
+              create_range_identity_matrix( i_rowmap, i_entries, nrows );
+#ifdef DIVERG_STATS
+              if ( timer2_ptr ) {
+                space.fence();
+                auto duration = timer2_ptr->seconds();
+                std::cout << "diverg::create_distance_index::create_range_identity_matrix"
+                             " time: " << duration * 1000 << "ms" << std::endl;
+              }
+#endif
+              handle_t handle( ncols, nrows, ncols, ra.nnz() ); // rI + rA
+#ifdef DIVERG_STATS
+              if ( timer2_ptr ) timer2_ptr->reset();
+#endif
+              // Computing rI + rA
+              rai_nnz = range_spadd( handle, i_rowmap, i_entries, ra_rowmap,
+                                     ra_entries, rai_rowmap, rai_entries );
+#ifdef DIVERG_STATS
+              if ( timer2_ptr ) {
+                space.fence();
+                auto duration = timer2_ptr->seconds();
+                std::cout << "diverg::create_distance_index::range_spadd time:"
+                          << duration * 1000 << "ms" << std::endl;
+              }
+#endif
+            }  // free: rI
+
+            if ( dlo != 0 ) {
+              handle_t handle( ncols, ra.nnz(), ncols, ra.nnz() );  // rA^dlo
+              // Computing rA^dlo
+              rad_nnz = range_power_inplace( handle, ra_rowmap, ra_entries,
+                                             rad_rowmap, rad_entries, dlo,
+                                             config, timer2_ptr );
+            }
+          }  // free: rA
+
+          handle_t handle( ncols, rai_nnz, ncols, rai_nnz );  // (rA + rI)^(dup - dlo)
+          // Computing (rA + rI)^(dup - dlo)
+          raid_nnz = range_power_inplace( handle, rai_rowmap, rai_entries,
+                                          raid_rowmap, raid_entries, dup - dlo,
+                                          config, timer2_ptr );
+        }  // free: (rA + rI)
+
+        if ( dlo != 0 ) {
+          handle_t handle( ncols, rad_nnz, ncols, raid_nnz );  // d
+          // Computing d
+          d_nnz = range_spgemm( handle, rad_rowmap, rad_entries, raid_rowmap,
+                                raid_entries, d_rowmap, d_entries, config );
+        }
+        else {
+          d_entries = raid_entries;
+          d_rowmap = raid_rowmap;
+          d_nnz = raid_nnz;
+        }
+
+#ifdef DIVERG_STATS
+        if ( timer1_ptr ) {
+          space.fence();
+          auto duration = timer1_ptr->seconds();
+          std::cout << "diverg::create_distance_index time:" << duration * 1000
+                    << "ms" << std::endl;
+        }
+#endif
+      } // free: rA^dlo and (rA + rI)^(dup - dlo)
+      return TRCRSMatrix( ncols, d_entries, d_rowmap, d_nnz );
     }
   } // namespace util
 } // namespace diverg
