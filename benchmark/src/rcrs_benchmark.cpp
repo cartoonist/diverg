@@ -18,29 +18,23 @@
 
 #include <cstdlib>
 #include <iostream>
-#include <iomanip>
-#include <cmath>
+#include <stdexcept>
 
 #include <gum/graph.hpp>
 #include <gum/io_utils.hpp>
 #include <Kokkos_Core.hpp>
-#include <Kokkos_Random.hpp>
 #include <KokkosSparse_CrsMatrix.hpp>
 #include <KokkosSparse_spgemm.hpp>
 #include <KokkosSparse_spadd.hpp>
-#include <Kokkos_StdAlgorithms.hpp>
-#include <Kokkos_NestedSort.hpp>
-#include <diverg/basic_types.hpp>
-#include <diverg/hbitvector.hpp>
-#include <diverg/dindex.hpp>
-#include <diverg/range_sparse.hpp>
+
+#include "rcrs_benchmark.hpp"
 
 using namespace diverg;
 
 
 template< typename TXCRSMatrix1, typename TXCRSMatrix2 >
 TXCRSMatrix1
-copy_xcrs( TXCRSMatrix2 mat )
+copy_xcrs( TXCRSMatrix2 mat, Kokkos::Timer* timer_ptr = nullptr )
 {
   using dst_matrix_type  = TXCRSMatrix1;
   using src_matrix_type  = TXCRSMatrix2;
@@ -62,9 +56,7 @@ copy_xcrs( TXCRSMatrix2 mat )
   using dst_exec_space = typename dst_matrix_type::execution_space;
   using dst_graph_type   = typename dst_matrix_type::staticcrsgraph_type;
 
-#ifdef DIVERG_STATS
-    Kokkos::Timer timer;
-#endif
+  if ( timer_ptr ) timer_ptr->reset();
 
   auto row_map =
       Kokkos::create_mirror_view_and_copy( dst_exec_space{},
@@ -90,18 +82,20 @@ copy_xcrs( TXCRSMatrix2 mat )
 
   dst_graph_type crs_graph( entries, row_map );
 
-#ifdef DIVERG_STATS
-  auto duration = timer.seconds();
-  std::cout << "copy time: " << duration * 1000 << "ms"
-            << std::endl;
-#endif
+  if ( timer_ptr ) {
+    dst_exec_space{}.fence();
+    auto duration = timer_ptr->seconds();
+    std::cout << "diverg::rcrs_benchmark::copy_xcrs time: " << duration * 1000
+              << "ms" << std::endl;
+  }
 
   return dst_matrix_type( "moved", mat.numRows(), values, crs_graph );
 }
 
 template< typename TXCRSMatrix >
 inline TXCRSMatrix
-kokkos_kernels_spgemm( TXCRSMatrix const& a, TXCRSMatrix const& b )
+kokkos_kernels_spgemm( TXCRSMatrix const& a, TXCRSMatrix const& b,
+                       Kokkos::Timer* timer_ptr = nullptr )
 {
   typedef typename TXCRSMatrix::ordinal_type ordinal_t;
   typedef typename TXCRSMatrix::size_type size_type;
@@ -125,33 +119,29 @@ kokkos_kernels_spgemm( TXCRSMatrix const& a, TXCRSMatrix const& b )
   TXCRSMatrix c;
 
   {
-#ifdef DIVERG_STATS
-    Kokkos::Timer timer;
-#endif
+    if ( timer_ptr ) timer_ptr->reset();
 
     KokkosSparse::spgemm_symbolic( handle, a, false, b, false, c );
-    execution_space{}.fence();
 
-#ifdef DIVERG_STATS
-    auto duration = timer.seconds();
-    std::cout << "Kokkos::SpGEMM_symbolic time: " << duration * 1000 << "ms"
-              << std::endl;
-#endif
+    if ( timer_ptr ) {
+      execution_space{}.fence();
+      auto duration = timer_ptr->seconds();
+      std::cout << "Kokkos::SpGEMM_symbolic time: " << duration * 1000 << "ms"
+                << std::endl;
+    }
   }
 
   {
-#ifdef DIVERG_STATS
-    Kokkos::Timer timer;
-#endif
+    if ( timer_ptr ) timer_ptr->reset();
 
     KokkosSparse::spgemm_numeric( handle, a, false, b, false, c );
-    execution_space{}.fence();
 
-#ifdef DIVERG_STATS
-    auto duration = timer.seconds();
-    std::cout << "Kokkos::SpGEMM_numeric time: " << duration * 1000 << "ms"
-              << std::endl;
-#endif
+    if ( timer_ptr ) {
+      execution_space{}.fence();
+      auto duration = timer_ptr->seconds();
+      std::cout << "Kokkos::SpGEMM_numeric time: " << duration * 1000 << "ms"
+                << std::endl;
+    }
   }
 
   handle.destroy_spgemm_handle();
@@ -168,7 +158,8 @@ kokkos_kernels_spgemm( TXCRSMatrix const& a, TXCRSMatrix const& b )
 
 template< typename TXCRSMatrix >
 inline TXCRSMatrix
-kokkos_kernels_spadd( TXCRSMatrix const& a, TXCRSMatrix const& b )
+kokkos_kernels_spadd( TXCRSMatrix const& a, TXCRSMatrix const& b,
+                      Kokkos::Timer* timer_ptr = nullptr )
 {
   typedef typename TXCRSMatrix::ordinal_type ordinal_t;
   typedef typename TXCRSMatrix::size_type size_type;
@@ -185,33 +176,29 @@ kokkos_kernels_spadd( TXCRSMatrix const& a, TXCRSMatrix const& b )
   TXCRSMatrix c;
 
   {
-#ifdef DIVERG_STATS
-    Kokkos::Timer timer;
-#endif
+    if ( timer_ptr ) timer_ptr->reset();
 
     KokkosSparse::spadd_symbolic( &handle, a, b, c );
-    execution_space{}.fence();
 
-#ifdef DIVERG_STATS
-    auto duration = timer.seconds();
-    std::cout << "Kokkos::SpAdd_symbolic time: " << duration * 1000 << "ms"
-              << std::endl;
-#endif
+    if ( timer_ptr ) {
+      execution_space{}.fence();
+      auto duration = timer_ptr->seconds();
+      std::cout << "Kokkos::SpAdd_symbolic time: " << duration * 1000 << "ms"
+                << std::endl;
+    }
   }
 
   {
-#ifdef DIVERG_STATS
-    Kokkos::Timer timer;
-#endif
+    if ( timer_ptr ) timer_ptr->reset();
 
     KokkosSparse::spadd_numeric( &handle, 1, a, 1, b, c );
-    execution_space{}.fence();
 
-#ifdef DIVERG_STATS
-    auto duration = timer.seconds();
-    std::cout << "Kokkos::SpAdd_numeric time: " << duration * 1000 << "ms"
-              << std::endl;
-#endif
+    if ( timer_ptr ) {
+      execution_space{}.fence();
+      auto duration = timer_ptr->seconds();
+      std::cout << "Kokkos::SpAdd_numeric time: " << duration * 1000 << "ms"
+                << std::endl;
+    }
   }
 
   handle.destroy_spadd_handle();
@@ -228,13 +215,14 @@ kokkos_kernels_spadd( TXCRSMatrix const& a, TXCRSMatrix const& b )
 
 template< typename TXCRSMatrix >
 inline TXCRSMatrix
-kokkos_kernels_power( TXCRSMatrix const& a, unsigned int n )
+kokkos_kernels_power( TXCRSMatrix const& a, unsigned int n,
+                      Kokkos::Timer* timer_ptr = nullptr )
 {
+  using execution_space = typename TXCRSMatrix::execution_space;
+
   assert( a.numRows() == a.numCols() );
 
-#ifdef DIVERG_STATS
-  Kokkos::Timer timer;
-#endif
+  if ( timer_ptr ) timer_ptr->reset();
   auto c = create_identity_matrix< TXCRSMatrix >( a.numRows() );
   auto a_copy = a;
 
@@ -245,120 +233,444 @@ kokkos_kernels_power( TXCRSMatrix const& a, unsigned int n )
     a_copy = kokkos_kernels_spgemm( a_copy, a_copy );
   }
 
-  typename TXCRSMatrix::execution_space{}.fence();
-
-#ifdef DIVERG_STATS
-  auto duration = timer.seconds();
-  std::cout << "KokkosKernels::power time: " << duration * 1000 << "ms"
-            << std::endl;
-#endif
+  if ( timer_ptr ) {
+    execution_space{}.fence();
+    auto duration = timer_ptr->seconds();
+    std::cout << "KokkosKernels::power time: " << duration * 1000 << "ms"
+              << std::endl;
+  }
 
   return c;
 }
 
-template< typename TExecSpace=Kokkos::DefaultExecutionSpace,
-          typename TAccumulator=HBitVectorAccumulator< 8192 >,
-          typename TOrdinal=int32_t, typename TScalar=int >
-void
-benchmark_range_spgemm_graph( const std::string& graph_path, int d,
-                              bool verbose )
+template< typename TXCRSMatrix >
+inline TXCRSMatrix
+create_dindex_pairg( TXCRSMatrix a, int dlo, int dup, int verbose = 0,
+                     Kokkos::Timer* timer1_ptr = nullptr,
+                     Kokkos::Timer* timer2_ptr = nullptr )
 {
-  typedef TExecSpace execution_space;
-  typedef TAccumulator accumulator_type;
-  typedef TScalar scalar_t;
-  typedef TOrdinal ordinal_t;
-  typedef typename AccumulatorDefaultPartition< accumulator_type >::type partition_type;
-#if defined(KOKKOS_ENABLE_CUDA)
-  using grid_type = MatchingGridSpecType< execution_space, Kokkos::Cuda, grid::Fixed< 16, 32 > >;  // otherwise choose grid::Auto
-#else
-  using grid_type = grid::Auto;
-#endif
-  using config_type = SparseConfig< grid_type, accumulator_type, partition_type, execution_space >;
-  typedef typename execution_space::device_type device_t;
-  typedef KokkosSparse::CrsMatrix< scalar_t, ordinal_t, device_t > xcrsmatrix_t;
-  typedef typename xcrsmatrix_t::HostMirror xcrs_host_mirror;
-  typedef std::common_type_t< typename xcrsmatrix_t::size_type, uint64_t > size_type;
-  typedef diverg::CRSMatrix< diverg::crs_matrix::RangeDynamic, bool, ordinal_t, size_type > range_crsmatrix_t;
-  typedef gum::SeqGraph< gum::Succinct > graph_type;
+  using xcrsmatrix_t = TXCRSMatrix;
+  using execution_space = typename xcrsmatrix_t::execution_space;
 
-  graph_type graph;
+  execution_space space;
 
-  std::cout << "Execution space concurrency: "
-            << execution_space::concurrency() << std::endl;
-  std::cout << "Loading input graph..." << std::endl;
-  gum::util::load( graph, graph_path, true );
+  xcrsmatrix_t c;
+  {
+    xcrsmatrix_t aid;
+    xcrsmatrix_t ad;
+    {
+      xcrsmatrix_t ai;
+      {
+        {
+          if ( timer1_ptr ) timer1_ptr->reset();
+          if ( timer2_ptr ) timer2_ptr->reset();
 
-  std::cout << "Creating adjacency matrix..." << std::endl;
-  std::vector< graph_type::rank_type > comp_ranks;
-  gum::util::for_each_start_node( graph, [&comp_ranks]( auto rank, auto ) {
-    comp_ranks.push_back( rank );
-    return true;
-  } );
+          auto I = create_identity_matrix< xcrsmatrix_t >( a.numRows() );
+
+          if ( timer2_ptr ) {
+            space.fence();
+            auto duration = timer2_ptr->seconds();
+            std::cout
+                << "diverg::create_dindex_pairg::create_identity_matrix time: "
+                << duration * 1000 << "ms" << std::endl;
+          }
+
+          if ( timer2_ptr ) timer2_ptr->reset();
+
+          ai = kokkos_kernels_spadd( a, I );
+
+          if ( timer2_ptr ) {
+            space.fence();
+            auto duration = timer2_ptr->seconds();
+            std::cout
+                << "diverg::create_dindex_pairg::kokkos_kernels_spadd time: "
+                << duration * 1000 << "ms" << std::endl;
+          }
+        }  // free: I
+
+        if ( dlo != 0 ) {
+          ad = kokkos_kernels_power( a, dlo, timer2_ptr );
+        }
+      }  // free: a
+
+      aid = kokkos_kernels_power( ai, dup - dlo, timer2_ptr );
+    }  // free: ai
+
+    if ( dlo != 0 )
+      c = kokkos_kernels_spgemm( ad, aid );
+    else
+      c = aid;
+
+    if ( timer1_ptr ) {
+      space.fence();
+      auto duration = timer1_ptr->seconds();
+      std::cout << "diverg::create_dindex_pairg time: " << duration * 1000
+                << "ms" << std::endl;
+    }
+  }  // free: ad, aid
+
+  if ( verbose > 1 ) diverg::print( c );
+
+  return c;
+}
+
+template< typename TOrdinal, typename TSize, typename TScalar,
+          typename TSparseConfig, typename TGraph >
+void
+benchmark_dindex_graph( TSparseConfig config, TGraph const& graph, int dlo,
+                        int dup, typename TGraph::rank_type start_rank,
+                        typename TGraph::rank_type end_rank, bool run_kokkos,
+                        bool run_rspgemm, bool compare, int verbose )
+{
+  using ordinal_t = TOrdinal;
+  using scalar_t = TScalar;
+  using config_type = TSparseConfig;
+  using execution_space = typename config_type::execution_space;
+  using device_t = typename execution_space::device_type;
+  using xcrsmatrix_t = KokkosSparse::CrsMatrix< scalar_t, ordinal_t, device_t >;
+  using xcrs_host_mirror = typename xcrsmatrix_t::HostMirror;
+  using size_type = std::common_type_t< typename xcrsmatrix_t::size_type, TSize >;
+  using range_crsmatrix_t = diverg::CRSMatrix< crs_matrix::RangeDynamic, bool, ordinal_t, size_type >;
+
+  Kokkos::Timer timer;
+
+  std::cout << "Distance index constraints: [d=" << dlo << ", D=" << dup << "]"
+            << std::endl;
+
+  std::cout << "Node ranks range: [" << start_rank << ", " << end_rank << ")"
+            << std::endl;
+
+  std::cout << "Creating adjacency matrix (on host)..." << std::endl;
+  timer.reset();
+
   auto h_a = diverg::util::adjacency_matrix< xcrs_host_mirror >(
-      graph, comp_ranks[ 0 ], comp_ranks[ 1 ] );
+      graph, start_rank, end_rank );
 
-  std::cout << "Copying adjacency matrix to device..." << std::endl;
-  auto a = copy_xcrs< xcrsmatrix_t >( h_a );
+  auto duration = timer.seconds();
+  std::cout << "diverg::benchmark_dindex_graph::adjacency_matrix time: "
+            << duration * 1000 << "ms" << std::endl;
 
-  auto I = create_identity_matrix< xcrsmatrix_t >( a.numRows() );
-  auto avi = kokkos_kernels_spadd( a, I );
+  std::cout << "Adjacency matrix has order " << h_a.numRows() << "x"
+            << h_a.numCols() << " and holds " << h_a.nnz()
+            << " non-zero elements" << std::endl;
 
-  std::cout << "Convert adjacency matrix to range CRS format..." << std::endl;
-  range_crsmatrix_t ra( h_a );
-  std::cout << "Convert identity matrix in range CRS format..." << std::endl;
-  auto rI = create_range_identity_matrix< range_crsmatrix_t >( h_a.numRows() );
-  std::cout << "Computing A + I..." << std::endl;
-  auto ravi = range_spadd( ra, rI );
+  xcrs_host_mirror h_c;
+  if ( run_kokkos ) {
+    std::cout << "Benchmarking PairG..." << std::endl;
+    std::cout << "Copy adjacency matrix to device..." << std::endl;
+    auto a = copy_xcrs< xcrsmatrix_t >( h_a, &timer );
+    if ( verbose > 1 ) diverg::print( a );
 
-  auto c = kokkos_kernels_power( avi, d );
-  execution_space{}.fence();
+    std::shared_ptr< Kokkos::Timer > inner_timer = nullptr;
+    if ( verbose > 1 ) inner_timer = std::make_shared< Kokkos::Timer >();
+    auto c = create_dindex_pairg( a, dlo, dup, verbose, &timer,
+                                  inner_timer.get() );
+    // execution_space{}.fence(); // no need to fence here if timer1 is not nullptr
+    std::cout << "Distance matrix of order " << c.numRows() << "x"
+              << c.numCols() << " holds " << c.nnz() << " non-zero elements"
+              << std::endl;
 
-  //if ( verbose ) {
-  //  diverg::print( a );
-  //  diverg::print( c );
-  //}
+    std::cout << "Copy result from device to host..." << std::endl;
+    h_c = copy_xcrs< xcrs_host_mirror >( c, &timer );
+  }
 
-  config_type config;
-  std::cout << "Computing (A + I)^" << d << "..." << std::endl;
-  auto rc = range_power( ravi, d, config );
-  execution_space{}.fence();
+  if ( run_rspgemm ) {
+    std::cout << "Benchmarking DiVerG..." << std::endl;
+    std::cout << "Convert adjacency matrix to range CRS format (on host)..."
+              << std::endl;
 
-  double comp_rate = static_cast< double >( rc.nnz() ) / rc.rowMap( rc.numRows() );
-  std::cout << "distance matrix of rank " << rc.numRows() << "x"
-            << rc.numCols() << " holds " << rc.nnz()
-            << " non-zero elements with compression rates " << comp_rate
-            << " (" << rc.rowMap( rc.numRows() ) << ")" << std::endl;
+    range_crsmatrix_t ra( h_a );
 
-  //if ( verbose ) {
-  //  diverg::print( rc, std::string( "RC" ) );
-  //}
+    duration = timer.seconds();
+    std::cout << "diverg::create_dindex::to_rcrsmatrix(h_a) time (host->host): "
+              << duration * 1000 << "ms" << std::endl;
+
+    std::shared_ptr< Kokkos::Timer > inner_timer = nullptr;
+    if ( verbose > 1 ) inner_timer = std::make_shared< Kokkos::Timer >();
+    auto rc = util::create_distance_index( ra, dlo, dup, config, &timer,
+                                           inner_timer.get() );
+    // execution_space{}.fence(); // no need to fence here since rc is on host
+
+    // TODO: compare h_c and rc
+    // if ( compare && run_kokkos && !is_same( rc, h_c ) ) {
+    //   std::cout << "[WARN] Distance matrices are not identical " << std::endl;
+    // }
+
+    double comp_rate
+        = static_cast< double >( rc.nnz() ) / rc.rowMap( rc.numRows() );
+    std::cout << "Distance matrix of order " << rc.numRows() << "x"
+              << rc.numCols() << " holds " << rc.nnz()
+              << " non-zero elements with compression rates " << comp_rate
+              << " (" << rc.rowMap( rc.numRows() ) << ")" << std::endl;
+
+    if ( verbose > 1 ) diverg::print( rc, std::string( "RC" ) );
+  }
 }
 
-template< typename TExecSpace=Kokkos::DefaultExecutionSpace,
-          typename TAccumulator=HBitVectorAccumulator< 8192 >,
-          typename TOrdinal=int32_t, typename TScalar=int >
+template< typename TOrdinal, typename TSize, typename TScalar,
+          typename TSparseConfig >
 void
-benchmark_range_spgemm_random( TOrdinal n, std::size_t nnz, bool verbose, unsigned int seed=0 )
+benchmark_dindex_random( TSparseConfig config, TOrdinal n, TSize nnz, int dlo,
+                         int dup, unsigned int seed, bool run_kokkos,
+                         bool run_rspgemm, bool compare, int verbose )
 {
-  typedef TExecSpace execution_space;
-  typedef TScalar scalar_t;
-  typedef TOrdinal ordinal_t;
-  typedef typename execution_space::device_type device_t;
-  typedef KokkosSparse::CrsMatrix< scalar_t, ordinal_t, device_t > xcrsmatrix_t;
-  typedef std::common_type_t< typename xcrsmatrix_t::size_type, uint64_t > size_type;
-  typedef diverg::CRSMatrix< diverg::crs_matrix::RangeDynamic, bool, ordinal_t, size_type > range_crsmatrix_t;
+  using ordinal_t = TOrdinal;
+  using scalar_t = TScalar;
+  using config_type = TSparseConfig;
+  using execution_space = typename config_type::execution_space;
+  using device_t = typename execution_space::device_type;
+  using xcrsmatrix_t = KokkosSparse::CrsMatrix< scalar_t, ordinal_t, device_t >;
+  using xcrs_host_mirror = typename xcrsmatrix_t::HostMirror;
+  using size_type = std::common_type_t< typename xcrsmatrix_t::size_type, TSize >;
+  using range_crsmatrix_t = diverg::CRSMatrix< crs_matrix::RangeDynamic, bool, ordinal_t, size_type >;
 
-  std::cout << "Creating a random square matrix of order " << n << " with "
-            << nnz << " non-zero values (seed=" << seed << ")..." << std::endl;
+  Kokkos::Timer timer;
+
+  std::cout << "Distance index constraints: [d=" << dlo << ", D=" << dup << "]"
+            << std::endl;
+
+  std::cout << "Random seed: " << seed << std::endl;
+
+  std::cout << "Creating random binary matrix (on device)..." << std::endl;
+  timer.reset();
+
+  // TODO: pass seed
   range_crsmatrix_t ra;
-  auto a = create_random_binary_matrix< xcrsmatrix_t >( n, nnz, ra/*, seed*/ );  // TODO: pass seed
+  auto a = create_random_binary_matrix< xcrsmatrix_t >( n, nnz, ra /*, seed*/ );
 
-  if ( verbose ) diverg::print( a );
-  //execution_space.fence();
-  //range_crsmatrix_t rc;
-  //range_spgemm( ra, ra );
+  auto duration = timer.seconds();
+  std::cout << "diverg::benchmark_dindex_random::create_random_binary_matrix time: "
+            << duration * 1000 << "ms" << std::endl;
+
+  std::cout << "Random binary matrix has order " << a.numRows() << "x"
+            << a.numCols() << " and holds " << a.nnz() << " non-zero elements"
+            << std::endl;
+
+  xcrs_host_mirror h_c;
+  if ( run_kokkos ) {
+    std::cout << "Benchmarking PairG..." << std::endl;
+    if ( verbose > 1 ) diverg::print( a );
+
+    std::shared_ptr< Kokkos::Timer > inner_timer = nullptr;
+    if ( verbose > 1 ) inner_timer = std::make_shared< Kokkos::Timer >();
+    auto c = create_dindex_pairg( a, dlo, dup, verbose, &timer,
+                                  inner_timer.get() );
+    // execution_space{}.fence(); // no need to fence here if timer1 is not nullptr
+    std::cout << "Distance matrix of order " << c.numRows() << "x"
+              << c.numCols() << " holds " << c.nnz() << " non-zero elements"
+              << std::endl;
+
+    std::cout << "Copy result from device to host..." << std::endl;
+    h_c = copy_xcrs< xcrs_host_mirror >( c, &timer );
+  }
+
+  if ( run_rspgemm ) {
+    std::cout << "Benchmarking DiVerG..." << std::endl;
+
+    std::shared_ptr< Kokkos::Timer > inner_timer = nullptr;
+    if ( verbose > 1 ) inner_timer = std::make_shared< Kokkos::Timer >();
+    auto rc = util::create_distance_index( ra, dlo, dup, config, &timer,
+                                           inner_timer.get() );
+    // execution_space{}.fence(); // no need to fence here since rc is on host
+
+    // TODO: compare h_c and rc
+    // if ( compare && run_kokkos && !is_same( rc, h_c ) ) {
+    //   std::cout << "[WARN] Distance matrices are not identical " << std::endl;
+    // }
+
+    double comp_rate
+        = static_cast< double >( rc.nnz() ) / rc.rowMap( rc.numRows() );
+    std::cout << "Distance matrix of order " << rc.numRows() << "x"
+              << rc.numCols() << " holds " << rc.nnz()
+              << " non-zero elements with compression rates " << comp_rate
+              << " (" << rc.rowMap( rc.numRows() ) << ")" << std::endl;
+
+    if ( verbose > 1 ) diverg::print( rc, std::string( "RC" ) );
+  }
 }
 
+template< typename TOrdinal, typename TSize, typename TScalar, typename TAcc,
+          typename TExecSpace, typename TPartition, typename TGrid >
+void
+benchmark_dindex( Options< TOrdinal, TSize > opts,
+                  SparseConfig< TGrid, TAcc, TPartition, TExecSpace > config )
+{
+  if ( opts.graph_path.empty() ) {
+    benchmark_dindex_random< TOrdinal, TSize, TScalar >(
+        config, opts.n, opts.nnz, opts.dlo, opts.dup, opts.seed, opts.run_kokkos,
+        opts.run_rspgemm, opts.compare, opts.verbose );
+  }
+  else {
+    using graph_type = gum::SeqGraph< gum::Succinct >;
+
+    auto graph = load_graph< graph_type >( opts.graph_path, opts.format );
+    auto rank_range = region_nodes_rank_range( graph, opts.reg_name, opts.seg_name );
+    benchmark_dindex_graph< TOrdinal, TSize, TScalar >(
+        config, graph, opts.dlo, opts.dup, rank_range.first, rank_range.second,
+        opts.run_kokkos, opts.run_rspgemm, opts.compare, opts.verbose );
+  }
+}
+
+template< typename TOrdinal, typename TSize, typename TScalar, typename TAcc,
+          typename TExecSpace, typename TPartition >
+void
+benchmark_dindex( Options< TOrdinal, TSize > opts, TExecSpace space,
+                  TPartition partition )
+{
+  if ( opts.grid == "auto" ) {
+    std::cout << "Grid: Auto" << std::endl;
+    using grid_type = grid::Auto;
+    using config_type
+        = SparseConfig< grid_type, TAcc, TPartition, TExecSpace >;
+    benchmark_dindex< TOrdinal, TSize, TScalar >( opts, config_type{} );
+  }
+  else if ( opts.grid == "suggested" ) {
+    std::cout << "Grid: Suggested" << std::endl;
+    using grid_type = grid::Suggested;
+    using config_type
+        = SparseConfig< grid_type, TAcc, TPartition, TExecSpace >;
+    benchmark_dindex< TOrdinal, TSize, TScalar >( opts, config_type{} );
+  }
+  else {
+    std::cout << "Grid: RunTime" << std::endl;
+    using grid_type = grid::RunTime;
+    using config_type
+        = SparseConfig< grid_type, TAcc, TPartition, TExecSpace >;
+    config_type config;
+    config.grid.m_team_work_size = RCRS_BENCHMARK_DEFAULT_TEAM_WORK_SIZE;
+    try {
+      std::cout << "Parsing provided grid dimension..." << std::endl;
+      std::istringstream iss( opts.grid );
+      char delimiter;
+      if ( !( iss >> config.grid.m_team_size ) )
+        throw std::invalid_argument( "parsing team size" );
+      if ( !( iss >> delimiter ) )
+        throw std::invalid_argument( "parsing first delimiter" );
+      if ( !( iss >> config.grid.m_vector_size ) )
+        throw std::invalid_argument( "parsing vector size" );
+      if ( iss >> delimiter )
+        iss >> config.grid.m_team_work_size;
+    }
+    catch ( std::invalid_argument& e ) {
+      std::cerr << "[ERROR] Invalid grid option '" << opts.grid
+                << "': " << e.what() << std::endl;
+      exit( EXIT_FAILURE );
+    }
+    if ( config.grid.team_size() == 0 || config.grid.vector_size() == 0
+         || config.grid.team_work_size() == 0 ) {
+      std::cerr << "[ERROR] Grid elements should be non-zero" << std::endl;
+      exit( EXIT_FAILURE );
+    }
+    std::cout << "Grid< team size, vector size, team work size >: <"
+              << config.grid.team_size() << ", " << config.grid.vector_size()
+              << ", " << config.grid.team_work_size() << ">" << std::endl;
+    benchmark_dindex< TOrdinal, TSize, TScalar >( opts, config );
+  }
+}
+
+template< typename TOrdinal, typename TSize, typename TScalar, typename TAcc,
+          typename TExecSpace >
+void
+benchmark_dindex( Options< TOrdinal, TSize > opts, TExecSpace space )
+{
+  if ( opts.partition == "thread-sequential" ) {
+    std::cout << "Partition: Thread-Sequential" << std::endl;
+    benchmark_dindex< TOrdinal, TSize, TScalar, TAcc >(
+        opts, space, ThreadSequentialPartition{} );
+  }
+  else if ( opts.partition == "team-sequential" ) {
+    std::cout << "Partition: Team-Sequential" << std::endl;
+    benchmark_dindex< TOrdinal, TSize, TScalar, TAcc >(
+        opts, space, TeamSequentialPartition{} );
+  }
+  else if ( opts.partition == "thread-parallel" ) {
+    std::cout << "Partition: Thread-Parallel" << std::endl;
+    benchmark_dindex< TOrdinal, TSize, TScalar, TAcc >(
+        opts, space, ThreadParallelPartition{} );
+  }
+  else if ( opts.partition == "thread-range-parallel" ) {
+    std::cout << "Partition: Thread-Range-Parallel" << std::endl;
+    benchmark_dindex< TOrdinal, TSize, TScalar, TAcc >(
+        opts, space, ThreadRangeParallelPartition{} );
+  }
+  else
+    throw std::runtime_error( "[ERROR] Unknown partition scheme '"
+                              + opts.partition + "'" );
+}
+
+template< typename TOrdinal, typename TSize, typename TScalar, typename TAcc >
+void
+benchmark_dindex( Options< TOrdinal, TSize > opts )
+{
+  if ( opts.host ) {
+    using execution_space = Kokkos::DefaultHostExecutionSpace;
+    execution_space space;
+    std::cout << "Execution space: Host" << std::endl;
+    std::cout << "Execution space concurrency: "
+              << execution_space::concurrency() << std::endl;
+    space.print_configuration( std::cout, opts.verbose );
+    benchmark_dindex< TOrdinal, TSize, TScalar, TAcc >( opts, space );
+  }
+  else {
+    using execution_space = Kokkos::DefaultExecutionSpace;
+    execution_space space;
+#if defined(KOKKOS_ENABLE_CUDA)
+    if constexpr ( std::is_same< execution_space, Kokkos::Cuda >::value ) {
+      std::cout << "Execution space: Cuda" << std::endl;
+    }
+    else {
+      std::cout
+          << "Execution space: Default (Kokkos::DefaultExecutionSpace != Cuda)"
+          << std::endl;
+    }
+#else
+    std::cout << "Execution space: Default" << std::endl;
+#endif
+    std::cout << "Execution space concurrency: "
+              << execution_space::concurrency() << std::endl;
+    space.print_configuration( std::cout, opts.verbose );
+    benchmark_dindex< TOrdinal, TSize, TScalar, TAcc >( opts, space );
+  }
+}
+
+template< typename TOrdinal, typename TSize, typename TScalar >
+void
+benchmark_dindex( Options< TOrdinal, TSize > opts )
+{
+  if ( opts.l1size == 1024 ) {
+    std::cout << "L1 size: 1024" << std::endl;
+    using accumulator_type = HBitVectorAccumulator< 1024 >;
+    benchmark_dindex< TOrdinal, TSize, TScalar, accumulator_type >( opts );
+  }
+  else if ( opts.l1size == 2048 ) {
+    std::cout << "L1 size: 2048" << std::endl;
+    using accumulator_type = HBitVectorAccumulator< 2048 >;
+    benchmark_dindex< TOrdinal, TSize, TScalar, accumulator_type >( opts );
+  }
+  else if ( opts.l1size == 4096 ) {
+    std::cout << "L1 size: 4096" << std::endl;
+    using accumulator_type = HBitVectorAccumulator< 4096 >;
+    benchmark_dindex< TOrdinal, TSize, TScalar, accumulator_type >( opts );
+  }
+  else if ( opts.l1size == 8192 ) {
+    std::cout << "L1 size: 8192" << std::endl;
+    using accumulator_type = HBitVectorAccumulator< 8192 >;
+    benchmark_dindex< TOrdinal, TSize, TScalar, accumulator_type >( opts );
+  }
+  else if ( opts.l1size == 16384 ) {
+    std::cout << "L1 size: 16384" << std::endl;
+    using accumulator_type = HBitVectorAccumulator< 16384 >;
+    benchmark_dindex< TOrdinal, TSize, TScalar, accumulator_type >( opts );
+  }
+  else if ( opts.l1size == 32768 ) {
+    std::cout << "L1 size: 32768" << std::endl;
+    using accumulator_type = HBitVectorAccumulator< 32768 >;
+    benchmark_dindex< TOrdinal, TSize, TScalar, accumulator_type >( opts );
+  }
+  else
+    throw std::runtime_error( "[ERROR] Invalid L1 size '"
+                              + std::to_string( opts.l1size ) + "'" );
+}
 
 template< typename TOrdinal = int32_t, typename TSize = uint64_t >
 struct Options {
@@ -389,8 +701,7 @@ struct Options {
         seg_name( "" ), reg_name( "" ), partition( "team-sequential" ),
         grid( "auto" ), l1size( 8192 ), run_kokkos( true ),
         run_rspgemm( true ), host( false ), compare( false ), verbose( 0 )
-  {
-  }
+  { }
 };
 
 template< typename TOrdinal = Options<>::ordinal_type,
@@ -572,12 +883,15 @@ check_options( Options< TOrdinal, TSize >& opts )
   }
 
   if ( opts.dup == 0 ) {
-    std::cerr << "[ERROR] Too few arguments (required argument: '-D')" << std::endl;
+    std::cerr << "[ERROR] Too few arguments (required argument: '-D')"
+              << std::endl;
     exit( EXIT_FAILURE );
   }
 
   if ( opts.dup < opts.dlo ) {
-    std::cerr << "[WARN] Lower bound of distance constraints is larger than upper bound" << std::endl;
+    std::cerr << "[WARN] Lower bound of distance constraints is larger than "
+                 "upper bound"
+              << std::endl;
     std::swap( opts.dlo, opts.dup );
     std::cerr << "[WARN] Swapped distance constraints bounds: (" << opts.dlo
               << ", " << opts.dup << ")" << std::endl;
@@ -601,11 +915,9 @@ main( int argc, char* argv[] )
 
   Kokkos::initialize( argc, argv );
 
-  if ( opts.graph_path.empty() )
-    benchmark_range_spgemm_random( opts.n, opts.nnz, opts.verbose );
-  else
-    benchmark_range_spgemm_graph( opts.graph_path, opts.d, opts.verbose );
+  benchmark_dindex< ordinal_type, size_type, scalar_type >( opts );
 
   Kokkos::finalize();
+
   return EXIT_SUCCESS;
 }
