@@ -98,6 +98,7 @@ namespace diverg {
     struct Fixed {};
     struct Auto {};
     struct Suggested {};
+    struct RunTime {};
   }
 
   struct _ExecGridBase {
@@ -235,6 +236,54 @@ namespace diverg {
     team_work_size( const std::size_t, const std::size_t )
     {
       return 16;
+    }
+  };
+
+  template< typename TExecSpace >
+  struct ExecGrid< TExecSpace, grid::RunTime >
+      : public _ExecGridBase {
+    int m_vector_size;
+    int m_team_size;
+    int m_team_work_size;
+
+    ExecGrid( const int vs=0, const int ts=0, const int tws=0 )
+        : m_vector_size( vs ), m_team_size( ts ), m_team_work_size( tws )
+    { }
+
+    inline int
+    vector_size( const int=0 )
+    {
+      return this->m_vector_size;
+    }
+
+    inline int
+    vector_size( const std::size_t, const std::size_t )
+    {
+      return this->m_vector_size;
+    }
+
+    inline int
+    team_size( const int=0 )
+    {
+      return this->m_team_size;
+    }
+
+    inline int
+    team_size( const std::size_t, const std::size_t )
+    {
+      return this->m_team_size;
+    }
+
+    inline int
+    team_work_size( const int=0 )
+    {
+      return this->m_team_work_size;
+    }
+
+    inline int
+    team_work_size( const std::size_t, const std::size_t )
+    {
+      return this->m_team_work_size;
     }
   };
 
