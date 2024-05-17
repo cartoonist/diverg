@@ -2596,42 +2596,61 @@ namespace diverg {
   }
 
   template< typename TRCRSMatrix,
-            typename TSparseConfig = DefaultSparseConfiguration,
-            typename TTimer = Kokkos::Timer >
+            typename TSparseConfig = DefaultSparseConfiguration >
   inline TRCRSMatrix
-  range_power( TRCRSMatrix const& a, unsigned int k, TSparseConfig config = {},
-               TTimer* timer_ptr = nullptr )
+  range_power( TRCRSMatrix const& a, unsigned int k, TSparseConfig config = {} )
   {
     typedef TRCRSMatrix rcrsmatrix_t;
     typedef SparseRangeHandle< rcrsmatrix_t > handle_t;
-    typedef typename rcrsmatrix_t::size_type size_type;
-    //typedef TSparseConfig config_type;
-    //typedef typename config_type::execution_space execution_space;
 
-    auto nrows = a.numRows();
-
-    auto a2n_entries = a.entries_device_view( config.space );
-    auto a2n_rowmap = a.rowmap_device_view( config.space );
-    size_type a2n_nnz = a.nnz();
-
-    auto tmp_entries = rcrsmatrix_t::make_entries_device_view( config.space );
-    auto tmp_rowmap = rcrsmatrix_t::make_rowmap_device_view( config.space );
+    auto a_entries = a.entries_device_view( config.space );
+    auto a_rowmap = a.rowmap_device_view( config.space );
 
     auto c_entries = rcrsmatrix_t::make_entries_device_view( config.space );
     auto c_rowmap = rcrsmatrix_t::make_rowmap_device_view( config.space );
-    size_type c_nnz = nrows;
+
+    handle_t handle( a, a );
+    auto nnz = range_power_inplace( handle, a_rowmap, a_entries, c_rowmap,
+                                    c_entries, k, config );
+
+    return TRCRSMatrix( a.numCols(), c_entries, c_rowmap, nnz );
+  }
+
+  template< typename THandle,
+            typename TRowMapDeviceViewA, typename TEntriesDeviceViewA,
+            typename TRowMapDeviceViewC, typename TEntriesDeviceViewC,
+            typename TSparseConfig = DefaultSparseConfiguration,
+            typename TTimer = Kokkos::Timer >
+  inline typename TRowMapDeviceViewC::value_type /* size_type */
+  range_power_inplace( const THandle& h1,
+                       TRowMapDeviceViewA& a_rowmap, TEntriesDeviceViewA& a_entries,
+                       TRowMapDeviceViewC& c_rowmap, TEntriesDeviceViewC& c_entries,
+                       unsigned int k, TSparseConfig config={},
+                       TTimer* timer_ptr = nullptr )
+  {
+    typedef THandle handle_t;
+    typedef TEntriesDeviceViewC c_entries_type;
+    typedef TRowMapDeviceViewC  c_row_map_type;
+    typedef typename c_row_map_type::value_type size_type;
+
+    c_entries_type tmp_entries;
+    c_row_map_type tmp_rowmap;
+
+    auto ncols = h1.a_ncols;
+    size_type a_nnz = h1.a_nnz;
+    size_type c_nnz = ncols;
 
 #ifdef DIVERG_STATS
     if ( timer_ptr ) timer_ptr->reset();
 #endif
 
-    create_range_identity_matrix( c_rowmap, c_entries, a.numRows() );
+    create_range_identity_matrix( c_rowmap, c_entries, ncols /*== nrows*/ );
 
     while ( true ) {
       if ( k & 1 ) {
-        handle_t handle( nrows, c_nnz, nrows, a2n_nnz );
-        c_nnz = range_spgemm( handle, c_rowmap, c_entries, a2n_rowmap,
-                              a2n_entries, tmp_rowmap, tmp_entries, config );
+        handle_t handle( ncols, c_nnz, ncols, a_nnz );
+        c_nnz = range_spgemm( handle, c_rowmap, c_entries, a_rowmap, a_entries,
+                              tmp_rowmap, tmp_entries, config );
         c_entries = tmp_entries;
         c_rowmap = tmp_rowmap;
       }
@@ -2639,11 +2658,11 @@ namespace diverg {
       k = k >> 1;
 
       if ( k != 0 ) {
-        handle_t handle( nrows, a2n_nnz, nrows, a2n_nnz );
-        a2n_nnz = range_spgemm( handle, a2n_rowmap, a2n_entries, a2n_rowmap,
-                                a2n_entries, tmp_rowmap, tmp_entries, config );
-        a2n_entries = tmp_entries;
-        a2n_rowmap = tmp_rowmap;
+        handle_t handle( ncols, a_nnz, ncols, a_nnz );
+        a_nnz = range_spgemm( handle, a_rowmap, a_entries, a_rowmap, a_entries,
+                              tmp_rowmap, tmp_entries, config );
+        a_entries = tmp_entries;
+        a_rowmap = tmp_rowmap;
       }
       else break;
     }
@@ -2657,7 +2676,7 @@ namespace diverg {
     }
 #endif
 
-    return TRCRSMatrix( a.numCols(), c_entries, c_rowmap, c_nnz );
+    return c_nnz;
   }
 }  // namespace diverg
 
