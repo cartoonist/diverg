@@ -312,7 +312,7 @@ namespace diverg {
       using execution_space = typename config_type::execution_space;
       using handle_t = SparseRangeHandle< TRCRSMatrix >;
       using size_type = typename rcrsmatrix_t::size_type;
-      using rcrs_spec_type = typename rcrsmatrix_t::rcrs_spec_type;
+      using rcrs_spec_type = typename rcrsmatrix_t::spec_type;
       using group_type = typename crs_matrix::Group< rcrs_spec_type >::type;
 
       static_assert( std::is_same< group_type, crs_matrix::RangeGroup >::value,
@@ -349,9 +349,21 @@ namespace diverg {
           size_type rai_nnz = 0;
 
           {
+#ifdef DIVERG_STATS
+            if ( timer2_ptr ) timer2_ptr->reset();
+#endif
             // rA (device)
             auto ra_entries = ra.entries_device_view( space );
             auto ra_rowmap = ra.rowmap_device_view( space );
+
+#ifdef DIVERG_STATS
+            if ( timer2_ptr ) {
+                space.fence();
+                auto duration = timer2_ptr->seconds();
+                std::cout << "diverg::create_distance_index::copy_to_device"
+                             " time: " << duration * 1000 << "ms" << std::endl;
+            }
+#endif
 
             {
               // rI (device)
@@ -376,13 +388,16 @@ namespace diverg {
               if ( timer2_ptr ) timer2_ptr->reset();
 #endif
               // Computing rI + rA
-              rai_nnz = range_spadd( handle, i_rowmap, i_entries, ra_rowmap,
-                                     ra_entries, rai_rowmap, rai_entries );
+              range_spadd( handle, i_rowmap, i_entries, ra_rowmap, ra_entries,
+                           rai_rowmap, rai_entries );
+              // rai_nnz = crs_matrix::nnz( rai_entries, rai_rowmap,
+              //                            crs_matrix::RangeGroup{} );
+              rai_nnz = ra.nnz() + nrows;  // estimate
 #ifdef DIVERG_STATS
               if ( timer2_ptr ) {
                 space.fence();
                 auto duration = timer2_ptr->seconds();
-                std::cout << "diverg::create_distance_index::range_spadd time:"
+                std::cout << "diverg::create_distance_index::range_spadd time: "
                           << duration * 1000 << "ms" << std::endl;
               }
 #endif
@@ -420,7 +435,7 @@ namespace diverg {
         if ( timer1_ptr ) {
           space.fence();
           auto duration = timer1_ptr->seconds();
-          std::cout << "diverg::create_distance_index time:" << duration * 1000
+          std::cout << "diverg::create_distance_index time: " << duration * 1000
                     << "ms" << std::endl;
         }
 #endif
