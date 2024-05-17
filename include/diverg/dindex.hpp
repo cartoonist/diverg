@@ -26,6 +26,82 @@
 
 namespace diverg {
   namespace util {
+    template< typename TGraph >
+    inline auto
+    first_node_in_region( TGraph const& graph,
+                          std::string const& reg_name )
+    {
+      typename TGraph::id_type first = 0;
+
+      graph.for_each_path( [&]( auto, auto id ) {
+        if ( graph.path_name( id ) == reg_name ) {
+          auto path = graph.path( id );
+          first = path.id_of( path.front() );
+          return false;
+        }
+        return true;
+      } );
+
+      return first;
+    }
+
+    template< typename TGraph >
+    inline auto
+    node_by_name( TGraph const& graph, std::string const& name )
+    {
+      typename TGraph::id_type nodeid = 0;
+
+      graph.for_each_node( [&]( auto rank, auto id ) {
+        if ( graph.get_node_prop( rank ).name == name ) {
+          nodeid = id;
+          return false;
+        }
+        return true;
+      } );
+
+      return nodeid;
+    }
+
+    /**
+     *  @brief  Get the upper bound on node ranks in a component containing the
+     *          given node with rank `node_rank`.
+     *
+     *  @param[in]  graph      The graph.
+     *  @param[in]  node_rank  The rank of the node.
+     *
+     *  @return  A tuple containing the upper bound on node ranks in the
+     *           component, component index the `node_rank` belongs to, and the
+     *           total number of components.
+     *
+     *  NOTE: This method assumes that the input graph is sorted such that node
+     *  rank ranges in components are disjoint.
+     */
+    template< typename TGraph >
+    inline auto
+    upper_node_rank_in_component( TGraph const& graph,
+                                  typename TGraph::rank_type node_rank )
+    {
+      using rank_type = typename TGraph::rank_type;
+
+      rank_type upper_rank = 0;
+      std::size_t nof_comps = 0;
+      rank_type comp_i = 0;
+      gum::util::for_each_start_side( graph, [&]( auto rank, auto ) {
+        ++nof_comps;
+        if ( upper_rank == 0 ) {
+          if ( rank > node_rank )
+            upper_rank = rank;
+          else
+            comp_i = nof_comps;
+        }
+        return true;
+      } );
+
+      if ( upper_rank == 0 ) upper_rank = graph.get_node_count() + 1;
+
+      return std::make_tuple( upper_rank, comp_i, nof_comps );
+    }
+
     /**
      *  @brief  Count the nodes of a subgraph in the graph or of the whole graph.
      *
