@@ -428,6 +428,11 @@ namespace diverg {
       this->a_nnz = a.nnz();
       this->b_nnz = b.nnz();
     }
+
+    SparseRangeHandle( ordinal_type ncols_a, size_type nnz_a,
+                       ordinal_type ncols_b, size_type nnz_b )
+      : a_ncols( ncols_a ), b_ncols( ncols_b ), a_nnz( nnz_a ), b_nnz( nnz_b )
+    { }
     /* === DATA MEMBERS === */
     ordinal_type a_ncols;
     ordinal_type b_ncols;
