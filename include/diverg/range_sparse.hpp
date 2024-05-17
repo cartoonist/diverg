@@ -1786,6 +1786,8 @@ namespace diverg {
           auto a_idx = a_rowmap( row );
           auto a_end = a_rowmap( row + 1 );
           hbv_type hbv( tm, b_ncols, row, part );
+          ordinal_type l1b = hbv.l1_begin_idx();
+          ordinal_type l1e = l1b + hbv.l1_size();
           // min entry (bitset aligned) in the current `row` in C
           ordinal_type c_min;
           // max entry + 1 (bitset aligned) in the current `row` in C
@@ -1833,8 +1835,6 @@ namespace diverg {
               Kokkos::Min< ordinal_type >( c_min ),
               Kokkos::Max< ordinal_type >( c_max ) );
 
-          auto l1b = hbv.l1_begin_idx();
-          auto l1e = l1b + hbv.l1_size();
           if ( c_max < c_min ) {
             c_min = l1b;
             c_max = l1b;
@@ -1964,6 +1964,8 @@ namespace diverg {
           auto a_idx = a_rowmap( row );
           auto a_end = a_rowmap( row + 1 );
           hbv_type hbv( tm, b_ncols, row, part );
+          ordinal_type l1b = hbv.l1_begin_idx();
+          ordinal_type l1e = l1b + hbv.l1_size();
           // min entry (bitset aligned) in the current `row` in C
           ordinal_type c_min;
           // max entry + 1 (bitset aligned) in the current `row` in C
@@ -2011,8 +2013,6 @@ namespace diverg {
               Kokkos::Min< ordinal_type >( c_min ),
               Kokkos::Max< ordinal_type >( c_max ) );
 
-          auto l1b = hbv.l1_begin_idx();
-          auto l1e = l1b + hbv.l1_size();
           if ( c_max < c_min ) {
             c_min = l1b;
             c_max = l1b;
@@ -2150,8 +2150,8 @@ namespace diverg {
           auto a_idx = a_rowmap( row );
           auto a_end = a_rowmap( row + 1 );
           hbv_type hbv( tm, b_ncols, row, part );
-          auto l1b = hbv.l1_begin_idx();
-          auto l1e = l1b + hbv.l1_size();
+          ordinal_type l1b = hbv.l1_begin_idx();
+          ordinal_type l1e = l1b + hbv.l1_size();
           // min entry (bitset aligned) in the current `row` in C
           ordinal_type c_min = l1b;
           // max entry + 1 (bitset aligned) in the current `row` in C
@@ -2320,8 +2320,8 @@ namespace diverg {
           auto a_idx = a_rowmap( row );
           auto a_end = a_rowmap( row + 1 );
           hbv_type hbv( tm, b_ncols, row, part );
-          auto l1b = hbv.l1_begin_idx();
-          auto l1e = l1b + hbv.l1_size();
+          ordinal_type l1b = hbv.l1_begin_idx();
+          ordinal_type l1e = l1b + hbv.l1_size();
           // min entry (bitset aligned) in the current `row` in C
           ordinal_type c_min = l1b;
           // max entry + 1 (bitset aligned) in the current `row` in C
