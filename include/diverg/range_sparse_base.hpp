@@ -353,6 +353,11 @@ namespace diverg {
   template< >
   struct ExecGrid< Kokkos::Cuda, grid::Auto >
       : public _ExecGridBase {
+    /* === MEMBER TYPES === */
+    using base_type = _ExecGridBase;
+    /* === STATIC MEMBERS === */
+    static constexpr const int MAX_VECTOR_SIZE = 32;
+    /* === STATIC METHODS === */
     static constexpr inline auto
     vector_size( const int=0 )
     {
@@ -375,6 +380,33 @@ namespace diverg {
     team_size( const std::size_t, const std::size_t )
     {
       return Kokkos::AUTO;
+    }
+
+    static inline int
+    team_work_size( const int rdense )
+    {
+      int vsize = rdense;
+      if ( vsize < 3 ) {
+        vsize = 2;
+      } else if ( vsize <= 6 ) {
+        vsize = 4;
+      } else if ( vsize <= 12 ) {
+        vsize = 8;
+      } else if ( vsize <= 24 ) {
+        vsize = 16;
+      } else if ( vsize <= 48 ) {
+        vsize = 32;
+      } else {
+        vsize = 64;
+      }
+      vsize = Kokkos::min( vsize, MAX_VECTOR_SIZE );
+      return 256 / vsize;
+    }
+
+    static inline int
+    team_work_size( const std::size_t nnz, const std::size_t nr )
+    {
+      return ExecGrid::team_work_size( base_type::row_density( nnz, nr ) );
     }
   };
   #endif
