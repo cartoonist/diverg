@@ -50,6 +50,7 @@ struct Options {
   bool run_kokkos;
   bool run_rspgemm;
   bool host;
+  std::string out_path;
   bool compare;
   int verbose;
   /* === LIFECYCLE === */
@@ -57,7 +58,8 @@ struct Options {
       : graph_path( "" ), format( "" ), n( 0 ), nnz( 0 ), dlo( 0 ), dup( 0 ),
         seg_name( "" ), reg_name( "" ), partition( "team-sequential" ),
         grid( "auto" ), l1size( 8192 ), run_kokkos( true ),
-        run_rspgemm( true ), host( false ), compare( false ), verbose( 0 )
+        run_rspgemm( true ), host( false ), out_path( "" ), compare( false ),
+        verbose( 0 )
   { }
 };
 
@@ -133,6 +135,10 @@ parse_arguments( int argc, char* argv[] )
       std::cout << "Parameter: host <- "
                 << ( opts.host ? "true" : "false" ) << std::endl;
     }
+    else if ( ( strcmp( argv[ i ], "-o" ) == 0 ) || ( strcmp( argv[ i ], "--output" ) == 0 ) ) {
+      opts.out_path = argv[ ++i ];
+      std::cout << "Parameter: output <- " << opts.graph_path << std::endl;
+    }
     else if ( ( strcmp( argv[ i ], "-c" ) == 0 ) || ( strcmp( argv[ i ], "--compare" ) == 0 ) ) {
       opts.compare = true;
       std::cout << "Parameter: compare <- "
@@ -146,12 +152,12 @@ parse_arguments( int argc, char* argv[] )
           << "Options:\n"
           << "  * Adjacency matrix as input (overrides -n and -z)\n"
           << "    --graph (-g) <path>:       graph file path\n"
-          << "    --format (-f) <str>:       specify graph file format when it is not\n"
+          << "    --format (-f) <str>:       specifies graph file format when it is not\n"
           << "                               automatically detected; e.g. when GFA has no header\n"
           << "                               (formats: 'gfa', 'gfa1', 'gfa2')\n"
-          << "    --region-name (-r) <str>:  specify target region by path id (embedded in graph)\n"
+          << "    --region-name (-r) <str>:  specifies target region by path id (embedded in graph)\n"
           << "                               (overrides -s)\n"
-          << "    --segment-name (-s) <str>: specify target region by the name of its first node\n"
+          << "    --segment-name (-s) <str>: specifies target region by the name of its first node\n"
           << "                               or segment (default: first node/segment in the graph)\n"
           << "  * Random matrix as input\n"
           << "    --order (-n) <int>:        exponent num, determines number of rows 2^num\n"
@@ -180,7 +186,8 @@ parse_arguments( int argc, char* argv[] )
           << "                               (default: false)\n"
           << "  --disable-rspgemm (-R):      disable benchmarking with rSpGEMM (DiVerG)\n"
           << "                               (default: false)\n"
-          << "  --compare (-c):              Compare resulting indices build by DiVerG and PairG\n"
+          << "  --output (-o) <path>:        specifies output path where DiVerG index will be saved\n"
+          << "  --compare (-c):              compare resulting indices build by DiVerG and PairG\n"
           << "                               given that -K is not set (default: false)\n"
           << "  --verbose (-v):              increase verbose level by one (default: 0)\n"
           << "  --help (-h):                 print this message"

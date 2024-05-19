@@ -320,7 +320,7 @@ void
 benchmark_dindex_graph( TSparseConfig config, TGraph const& graph, int dlo,
                         int dup, typename TGraph::rank_type start_rank,
                         typename TGraph::rank_type end_rank, bool run_kokkos,
-                        bool run_rspgemm, bool compare, int verbose )
+                        bool run_rspgemm, std::ostream& output, bool compare, int verbose )
 {
   using ordinal_t = TOrdinal;
   using scalar_t = TScalar;
@@ -403,6 +403,8 @@ benchmark_dindex_graph( TSparseConfig config, TGraph const& graph, int dlo,
               << " non-zero elements with compression rates " << comp_rate
               << " (" << rc.rowMap( rc.numRows() ) << ")" << std::endl;
 
+    if ( output ) rc.serialize( output );
+
     if ( verbose > 1 ) diverg::print( rc, std::string( "RC" ) );
   }
 }
@@ -412,7 +414,8 @@ template< typename TOrdinal, typename TSize, typename TScalar,
 void
 benchmark_dindex_random( TSparseConfig config, TOrdinal n, TSize nnz, int dlo,
                          int dup, unsigned int seed, bool run_kokkos,
-                         bool run_rspgemm, bool compare, int verbose )
+                         bool run_rspgemm, std::ostream& output, bool compare,
+                         int verbose )
 {
   using ordinal_t = TOrdinal;
   using scalar_t = TScalar;
@@ -485,6 +488,8 @@ benchmark_dindex_random( TSparseConfig config, TOrdinal n, TSize nnz, int dlo,
               << " non-zero elements with compression rates " << comp_rate
               << " (" << rc.rowMap( rc.numRows() ) << ")" << std::endl;
 
+    if ( output ) rc.serialize( output );
+
     if ( verbose > 1 ) diverg::print( rc, std::string( "RC" ) );
   }
 }
@@ -495,10 +500,18 @@ void
 benchmark_dindex( Options< TOrdinal, TSize > opts,
                   SparseConfig< TGrid, TAcc, TPartition, TExecSpace > config )
 {
+
+  std::ofstream ofs( opts.out_path, std::ofstream::out | std::ofstream::binary );
+
+  if ( !opts.out_path.empty() && !ofs ) {
+    std::cerr << "[WARN] Output path is not writable. Skipping..."
+              << std::endl;
+  }
+
   if ( opts.graph_path.empty() ) {
     benchmark_dindex_random< TOrdinal, TSize, TScalar >(
-        config, opts.n, opts.nnz, opts.dlo, opts.dup, opts.seed, opts.run_kokkos,
-        opts.run_rspgemm, opts.compare, opts.verbose );
+        config, opts.n, opts.nnz, opts.dlo, opts.dup, opts.seed,
+        opts.run_kokkos, opts.run_rspgemm, ofs, opts.compare, opts.verbose );
   }
   else {
     using graph_type = gum::SeqGraph< gum::Succinct >;
@@ -507,7 +520,7 @@ benchmark_dindex( Options< TOrdinal, TSize > opts,
     auto rank_range = region_nodes_rank_range( graph, opts.reg_name, opts.seg_name );
     benchmark_dindex_graph< TOrdinal, TSize, TScalar >(
         config, graph, opts.dlo, opts.dup, rank_range.first, rank_range.second,
-        opts.run_kokkos, opts.run_rspgemm, opts.compare, opts.verbose );
+        opts.run_kokkos, opts.run_rspgemm, ofs, opts.compare, opts.verbose );
   }
 }
 
