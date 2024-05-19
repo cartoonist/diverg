@@ -301,6 +301,11 @@ create_dindex_pairg( TXCRSMatrix a, int dlo, int dup, int verbose = 0,
     else
       c = aid;
 
+    auto func = SortEntriesFunctor( c.graph.row_map, c.graph.entries );
+
+    Kokkos::parallel_for( "diverg::create_dindex_pairg::::sort_entries",
+                          func.policy( c.numRows() ), func );
+
     if ( timer1_ptr ) {
       space.fence();
       auto duration = timer1_ptr->seconds();
