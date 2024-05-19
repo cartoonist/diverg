@@ -319,13 +319,45 @@ create_dindex_pairg( TXCRSMatrix a, int dlo, int dup, int verbose = 0,
   return c;
 }
 
+template< typename TOrdinal >
+inline std::vector< std::pair< TOrdinal, TOrdinal > >
+create_random_pairs( TOrdinal n, unsigned int count )
+{
+  std::vector< std::pair< TOrdinal, TOrdinal > > pairs;
+  for ( unsigned int i = 0; i < count; ++i ) {
+    pairs.push_back( std::make_pair( random::random_index( n ),
+                                     random::random_index( n ) ) );
+  }
+  return pairs;
+}
+
+template< typename TXCRSMatrix >
+inline bool
+query_index( TXCRSMatrix const& a, typename TXCRSMatrix::ordinal_type i,
+             typename TXCRSMatrix::ordinal_type j )
+{
+  using size_type = typename TXCRSMatrix::size_type;
+
+  if ( i >= a.numRows() || j >= a.numCols() ) {
+    std::cerr << "[WARN] query index out of range" << std::endl;
+    return false;
+  }
+
+  size_type begin = a.graph.row_map( i );
+  size_type end = a.graph.row_map( i + 1 );
+
+  return std::binary_search( a.graph.entries.data() + begin,
+                             a.graph.entries.data() + end, j );
+}
+
 template< typename TOrdinal, typename TSize, typename TScalar,
           typename TSparseConfig, typename TGraph >
 void
 benchmark_dindex_graph( TSparseConfig config, TGraph const& graph, int dlo,
                         int dup, typename TGraph::rank_type start_rank,
                         typename TGraph::rank_type end_rank, bool run_kokkos,
-                        bool run_rspgemm, std::ostream& output, bool compare, int verbose )
+                        bool run_rspgemm, unsigned int query_count,
+                        std::ostream& output, bool compare, int verbose )
 {
   using ordinal_t = TOrdinal;
   using scalar_t = TScalar;
@@ -359,6 +391,8 @@ benchmark_dindex_graph( TSparseConfig config, TGraph const& graph, int dlo,
             << h_a.numCols() << " and holds " << h_a.nnz()
             << " non-zero elements" << std::endl;
 
+  auto pairs = create_random_pairs( h_a.numRows(), query_count );
+
   xcrs_host_mirror h_c;
   if ( run_kokkos ) {
     std::cout << "Benchmarking PairG..." << std::endl;
@@ -377,12 +411,26 @@ benchmark_dindex_graph( TSparseConfig config, TGraph const& graph, int dlo,
 
     std::cout << "Copy result from device to host..." << std::endl;
     h_c = copy_xcrs< xcrs_host_mirror >( c, &timer );
+
+    std::cout << "Querying PairG index (on host)..." << std::endl;
+    std::vector< bool > results( query_count );
+    timer.reset();
+
+    for ( unsigned int i = 0; i < query_count; ++i ) {
+      results[ i ] = query_index( h_c, pairs[ i ].first, pairs[ i ].second );
+    }
+
+    auto duration = timer.seconds();
+    std::cout << "diverg::benchmark_dindex_graph::pairg_query_index time: "
+              << duration * 1000 << "ms" << std::endl;
   }
 
   if ( run_rspgemm ) {
     std::cout << "Benchmarking DiVerG..." << std::endl;
     std::cout << "Convert adjacency matrix to range CRS format (on host)..."
               << std::endl;
+
+    timer.reset();
 
     range_crsmatrix_t ra( h_a );
 
@@ -408,6 +456,18 @@ benchmark_dindex_graph( TSparseConfig config, TGraph const& graph, int dlo,
               << " non-zero elements with compression rates " << comp_rate
               << " (" << rc.rowMap( rc.numRows() ) << ")" << std::endl;
 
+    std::cout << "Querying DiVerG index (on host)..." << std::endl;
+    std::vector< bool > results( query_count );
+    timer.reset();
+
+    for ( unsigned int i = 0; i < query_count; ++i ) {
+      results[ i ] = rc( pairs[ i ].first, pairs[ i ].second );
+    }
+
+    auto duration = timer.seconds();
+    std::cout << "diverg::benchmark_dindex_graph::diverg_query_index time: "
+              << duration * 1000 << "ms" << std::endl;
+
     if ( output ) rc.serialize( output );
 
     if ( verbose > 1 ) diverg::print( rc, std::string( "RC" ) );
@@ -419,8 +479,8 @@ template< typename TOrdinal, typename TSize, typename TScalar,
 void
 benchmark_dindex_random( TSparseConfig config, TOrdinal n, TSize nnz, int dlo,
                          int dup, unsigned int seed, bool run_kokkos,
-                         bool run_rspgemm, std::ostream& output, bool compare,
-                         int verbose )
+                         bool run_rspgemm, unsigned int query_count,
+                         std::ostream& output, bool compare, int verbose )
 {
   using ordinal_t = TOrdinal;
   using scalar_t = TScalar;
@@ -454,6 +514,8 @@ benchmark_dindex_random( TSparseConfig config, TOrdinal n, TSize nnz, int dlo,
             << a.numCols() << " and holds " << a.nnz() << " non-zero elements"
             << std::endl;
 
+  auto pairs = create_random_pairs( n, query_count );
+
   xcrs_host_mirror h_c;
   if ( run_kokkos ) {
     std::cout << "Benchmarking PairG..." << std::endl;
@@ -470,6 +532,18 @@ benchmark_dindex_random( TSparseConfig config, TOrdinal n, TSize nnz, int dlo,
 
     std::cout << "Copy result from device to host..." << std::endl;
     h_c = copy_xcrs< xcrs_host_mirror >( c, &timer );
+
+    std::cout << "Querying PairG index (on host)..." << std::endl;
+    std::vector< bool > results( query_count );
+    timer.reset();
+
+    for ( unsigned int i = 0; i < query_count; ++i ) {
+      results[ i ] = query_index( h_c, pairs[ i ].first, pairs[ i ].second );
+    }
+
+    auto duration = timer.seconds();
+    std::cout << "diverg::benchmark_dindex_random::pairg_query_index time: "
+              << duration * 1000 << "ms" << std::endl;
   }
 
   if ( run_rspgemm ) {
@@ -492,6 +566,18 @@ benchmark_dindex_random( TSparseConfig config, TOrdinal n, TSize nnz, int dlo,
               << rc.numCols() << " holds " << rc.nnz()
               << " non-zero elements with compression rates " << comp_rate
               << " (" << rc.rowMap( rc.numRows() ) << ")" << std::endl;
+
+    std::cout << "Querying DiVerG index (on host)..." << std::endl;
+    std::vector< bool > results( query_count );
+    timer.reset();
+
+    for ( unsigned int i = 0; i < query_count; ++i ) {
+      results[ i ] = rc( pairs[ i ].first, pairs[ i ].second );
+    }
+
+    auto duration = timer.seconds();
+    std::cout << "diverg::benchmark_dindex_random::diverg_query_index time: "
+              << duration * 1000 << "ms" << std::endl;
 
     if ( output ) rc.serialize( output );
 
@@ -516,7 +602,8 @@ benchmark_dindex( Options< TOrdinal, TSize > opts,
   if ( opts.graph_path.empty() ) {
     benchmark_dindex_random< TOrdinal, TSize, TScalar >(
         config, opts.n, opts.nnz, opts.dlo, opts.dup, opts.seed,
-        opts.run_kokkos, opts.run_rspgemm, ofs, opts.compare, opts.verbose );
+        opts.run_kokkos, opts.run_rspgemm, opts.query_count, ofs, opts.compare,
+        opts.verbose );
   }
   else {
     using graph_type = gum::SeqGraph< gum::Succinct >;
@@ -525,7 +612,8 @@ benchmark_dindex( Options< TOrdinal, TSize > opts,
     auto rank_range = region_nodes_rank_range( graph, opts.reg_name, opts.seg_name );
     benchmark_dindex_graph< TOrdinal, TSize, TScalar >(
         config, graph, opts.dlo, opts.dup, rank_range.first, rank_range.second,
-        opts.run_kokkos, opts.run_rspgemm, ofs, opts.compare, opts.verbose );
+        opts.run_kokkos, opts.run_rspgemm, opts.query_count, ofs, opts.compare,
+        opts.verbose );
   }
 }
 

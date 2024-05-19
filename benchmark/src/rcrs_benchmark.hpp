@@ -50,6 +50,7 @@ struct Options {
   bool run_kokkos;
   bool run_rspgemm;
   bool host;
+  unsigned int query_count;
   std::string out_path;
   bool compare;
   int verbose;
@@ -58,8 +59,8 @@ struct Options {
       : graph_path( "" ), format( "" ), n( 0 ), nnz( 0 ), dlo( 0 ), dup( 0 ),
         seg_name( "" ), reg_name( "" ), partition( "team-sequential" ),
         grid( "auto" ), l1size( 8192 ), run_kokkos( true ),
-        run_rspgemm( true ), host( false ), out_path( "" ), compare( false ),
-        verbose( 0 )
+        run_rspgemm( true ), host( false ), query_count( 1000000 ),
+        out_path( "" ), compare( false ), verbose( 0 )
   { }
 };
 
@@ -135,6 +136,10 @@ parse_arguments( int argc, char* argv[] )
       std::cout << "Parameter: host <- "
                 << ( opts.host ? "true" : "false" ) << std::endl;
     }
+    else if ( ( strcmp( argv[ i ], "-q" ) == 0 ) || ( strcmp( argv[ i ], "--query-count" ) == 0 ) ) {
+      opts.query_count = atoi( argv[ ++i ] );
+      std::cout << "Parameter: query-count <- " << opts.query_count << std::endl;
+    }
     else if ( ( strcmp( argv[ i ], "-o" ) == 0 ) || ( strcmp( argv[ i ], "--output" ) == 0 ) ) {
       opts.out_path = argv[ ++i ];
       std::cout << "Parameter: output <- " << opts.graph_path << std::endl;
@@ -186,6 +191,8 @@ parse_arguments( int argc, char* argv[] )
           << "                               (default: false)\n"
           << "  --disable-rspgemm (-R):      disable benchmarking with rSpGEMM (DiVerG)\n"
           << "                               (default: false)\n"
+          << "  --query-count (-q) <int>:    number of queries for measuring query performance\n"
+          << "                               (default: 1M)\n"
           << "  --output (-o) <path>:        specifies output path where DiVerG index will be saved\n"
           << "  --compare (-c):              compare resulting indices build by DiVerG and PairG\n"
           << "                               given that -K is not set (default: false)\n"
