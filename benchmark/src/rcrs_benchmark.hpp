@@ -142,7 +142,7 @@ parse_arguments( int argc, char* argv[] )
     }
     else if ( ( strcmp( argv[ i ], "-o" ) == 0 ) || ( strcmp( argv[ i ], "--output" ) == 0 ) ) {
       opts.out_path = argv[ ++i ];
-      std::cout << "Parameter: output <- " << opts.graph_path << std::endl;
+      std::cout << "Parameter: output <- " << opts.out_path << std::endl;
     }
     else if ( ( strcmp( argv[ i ], "-c" ) == 0 ) || ( strcmp( argv[ i ], "--compare" ) == 0 ) ) {
       opts.compare = true;
