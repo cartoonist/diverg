@@ -368,6 +368,7 @@ benchmark_dindex_graph( TSparseConfig config, TGraph const& graph, int dlo,
   using xcrs_host_mirror = typename xcrsmatrix_t::HostMirror;
   using size_type = std::common_type_t< typename xcrsmatrix_t::size_type, TSize >;
   using range_crsmatrix_t = diverg::CRSMatrix< crs_matrix::RangeDynamic, bool, ordinal_t, size_type >;
+  using cmp_range_crsmatrix_t = diverg::CRSMatrix< crs_matrix::RangeCompressed, bool, ordinal_t, size_type >;
 
   Kokkos::Timer timer;
 
@@ -434,7 +435,7 @@ benchmark_dindex_graph( TSparseConfig config, TGraph const& graph, int dlo,
 
     range_crsmatrix_t ra( h_a );
 
-    duration = timer.seconds();
+    auto duration = timer.seconds();
     std::cout << "diverg::create_dindex::to_rcrsmatrix(h_a) time (host->host): "
               << duration * 1000 << "ms" << std::endl;
 
@@ -464,11 +465,32 @@ benchmark_dindex_graph( TSparseConfig config, TGraph const& graph, int dlo,
       results[ i ] = rc( pairs[ i ].first, pairs[ i ].second );
     }
 
-    auto duration = timer.seconds();
+    duration = timer.seconds();
     std::cout << "diverg::benchmark_dindex_graph::diverg_query_index time: "
               << duration * 1000 << "ms" << std::endl;
 
-    if ( output ) rc.serialize( output );
+    std::cout << "Converting to `RangeCompress` index (on host)..."
+              << std::endl;
+    timer.reset();
+
+    cmp_range_crsmatrix_t cmp_rc( rc );
+
+    duration = timer.seconds();
+    std::cout << "diverg::benchmark_dindex_graph::range_compressed_index time: "
+              << duration * 1000 << "ms" << std::endl;
+
+    std::cout << "Querying DiVerG `RangeCompress` index (on host)..." << std::endl;
+    timer.reset();
+
+    for ( unsigned int i = 0; i < query_count; ++i ) {
+      results[ i ] = rc( pairs[ i ].first, pairs[ i ].second );
+    }
+
+    duration = timer.seconds();
+    std::cout << "diverg::benchmark_dindex_graph::diverg_query_compressed_index time: "
+              << duration * 1000 << "ms" << std::endl;
+
+    if ( output ) cmp_rc.serialize( output );
 
     if ( verbose > 1 ) diverg::print( rc, std::string( "RC" ) );
   }
@@ -491,6 +513,7 @@ benchmark_dindex_random( TSparseConfig config, TOrdinal n, TSize nnz, int dlo,
   using xcrs_host_mirror = typename xcrsmatrix_t::HostMirror;
   using size_type = std::common_type_t< typename xcrsmatrix_t::size_type, TSize >;
   using range_crsmatrix_t = diverg::CRSMatrix< crs_matrix::RangeDynamic, bool, ordinal_t, size_type >;
+  using cmp_range_crsmatrix_t = diverg::CRSMatrix< crs_matrix::RangeCompressed, bool, ordinal_t, size_type >;
 
   Kokkos::Timer timer;
 
@@ -579,7 +602,28 @@ benchmark_dindex_random( TSparseConfig config, TOrdinal n, TSize nnz, int dlo,
     std::cout << "diverg::benchmark_dindex_random::diverg_query_index time: "
               << duration * 1000 << "ms" << std::endl;
 
-    if ( output ) rc.serialize( output );
+    std::cout << "Converting to `RangeCompress` index (on host)..."
+              << std::endl;
+    timer.reset();
+
+    cmp_range_crsmatrix_t cmp_rc( rc );
+
+    duration = timer.seconds();
+    std::cout << "diverg::benchmark_dindex_random::range_compressed_index time: "
+              << duration * 1000 << "ms" << std::endl;
+
+    std::cout << "Querying DiVerG `RangeCompress` index (on host)..." << std::endl;
+    timer.reset();
+
+    for ( unsigned int i = 0; i < query_count; ++i ) {
+      results[ i ] = rc( pairs[ i ].first, pairs[ i ].second );
+    }
+
+    duration = timer.seconds();
+    std::cout << "diverg::benchmark_dindex_random::diverg_query_compressed_index time: "
+              << duration * 1000 << "ms" << std::endl;
+
+    if ( output ) cmp_rc.serialize( output );
 
     if ( verbose > 1 ) diverg::print( rc, std::string( "RC" ) );
   }
