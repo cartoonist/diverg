@@ -479,6 +479,9 @@ benchmark_dindex_graph( TSparseConfig config, TGraph const& graph, int dlo,
     std::cout << "diverg::benchmark_dindex_graph::range_compressed_index time: "
               << duration * 1000 << "ms" << std::endl;
 
+    std::cout << "RangeCompressed index size: " << cmp_rc.size_in_bytes()
+              << " Bytes" << std::endl;
+
     std::cout << "Querying DiVerG `RangeCompress` index (on host)..." << std::endl;
     timer.reset();
 
@@ -611,6 +614,9 @@ benchmark_dindex_random( TSparseConfig config, TOrdinal n, TSize nnz, int dlo,
     duration = timer.seconds();
     std::cout << "diverg::benchmark_dindex_random::range_compressed_index time: "
               << duration * 1000 << "ms" << std::endl;
+
+    std::cout << "RangeCompressed index size: " << cmp_rc.size_in_bytes()
+              << " Bytes" << std::endl;
 
     std::cout << "Querying DiVerG `RangeCompress` index (on host)..." << std::endl;
     timer.reset();

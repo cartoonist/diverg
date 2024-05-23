@@ -546,6 +546,13 @@ namespace diverg {
     {
       crs_matrix::fill_all_partial( entries, rowmap, ex, scol, srow, crs_matrix::BasicGroup{} );
     }
+
+    static inline TSize
+    size_in_bytes( entries_type const& entries, rowmap_type const& rowmap )
+    {
+      return entries.size() * sizeof( TOrdinal )
+             + rowmap.size() * sizeof( TSize ) + sizeof( TOrdinal );
+    }
   };
 
   template< typename TOrdinal, typename TSize >
@@ -678,6 +685,13 @@ namespace diverg {
     {
       crs_matrix::fill_all_partial( entries, rowmap, ex, scol, srow, crs_matrix::BasicGroup{} );
     }
+
+    static inline TSize
+    size_in_bytes( entries_type const& entries, rowmap_type const& rowmap )
+    {
+      return sdsl::size_in_bytes( entries ) + rowmap.size() * sizeof( TSize )
+             + sizeof( TOrdinal );
+    }
   };
 
   template< typename TOrdinal, typename TSize >
@@ -800,6 +814,13 @@ namespace diverg {
                       TOrdinal scol=0, TOrdinal srow=0 )
     {
       crs_matrix::fill_all_partial( entries, rowmap, ex, scol, srow, crs_matrix::BasicGroup{} );
+    }
+
+    static inline TSize
+    size_in_bytes( entries_type const& entries, rowmap_type const& rowmap )
+    {
+      return sdsl::size_in_bytes( entries ) + sdsl::size_in_bytes( rowmap )
+             + sizeof( TOrdinal );
     }
   };
 
@@ -938,6 +959,13 @@ namespace diverg {
     {
       throw std::runtime_error( "A Compressed Basic CRS cannot be modified" );
     }
+
+    static inline TSize
+    size_in_bytes( entries_type const& entries, rowmap_type const& rowmap )
+    {
+      return sdsl::size_in_bytes( entries ) + sdsl::size_in_bytes( rowmap )
+             + sizeof( TOrdinal );
+    }
   };
 
   template< typename TOrdinal, typename TSize >
@@ -1060,6 +1088,14 @@ namespace diverg {
                       TOrdinal scol=0, TOrdinal srow=0 )
     {
       crs_matrix::fill_all_partial( entries, rowmap, ex, scol, srow, crs_matrix::RangeGroup{} );
+    }
+
+    static inline TSize
+    size_in_bytes( entries_type const& entries, rowmap_type const& rowmap )
+    {
+      return entries.size() * sizeof( TOrdinal )
+             + rowmap.size() * sizeof( TSize ) + sizeof( TOrdinal )
+             + sizeof( TSize );
     }
   };
 
@@ -1193,6 +1229,13 @@ namespace diverg {
     {
       crs_matrix::fill_all_partial( entries, rowmap, ex, scol, srow, crs_matrix::RangeGroup{} );
     }
+
+    static inline TSize
+    size_in_bytes( entries_type const& entries, rowmap_type const& rowmap )
+    {
+      return sdsl::size_in_bytes( entries ) + rowmap.size() * sizeof( TSize )
+             + sizeof( TOrdinal ) + sizeof( TSize );
+    }
   };
 
   template< typename TOrdinal, typename TSize >
@@ -1315,6 +1358,13 @@ namespace diverg {
                       TOrdinal scol=0, TOrdinal srow=0 )
     {
       crs_matrix::fill_all_partial( entries, rowmap, ex, scol, srow, crs_matrix::RangeGroup{} );
+    }
+
+    static inline TSize
+    size_in_bytes( entries_type const& entries, rowmap_type const& rowmap )
+    {
+      return sdsl::size_in_bytes( entries ) + sdsl::size_in_bytes( rowmap )
+             + sizeof( TOrdinal ) + sizeof( TSize );
     }
   };
 
@@ -1452,6 +1502,13 @@ namespace diverg {
                       TOrdinal scol=0, TOrdinal srow=0 )
     {
       throw std::runtime_error( "A Compressed Range CRS cannot be modified" );
+    }
+
+    static inline TSize
+    size_in_bytes( entries_type const& entries, rowmap_type const& rowmap )
+    {
+      return sdsl::size_in_bytes( entries ) + sdsl::size_in_bytes( rowmap )
+             + sizeof( TOrdinal ) + sizeof( TSize );
     }
   };
 
@@ -1851,6 +1908,12 @@ namespace diverg {
       diverg::deserialize( in, this->rowmap );
       diverg::deserialize( in, ncols );
       this->num_cols = ncols;
+    }
+
+    inline size_type
+    size_in_bytes( ) const
+    {
+      return traits_type::size_in_bytes( this->entries, this->rowmap );
     }
   protected:
     /* === DATA MEMBERS === */
