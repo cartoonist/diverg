@@ -535,7 +535,7 @@ namespace diverg {
             typename TRowMapDeviceViewB, typename TEntriesDeviceViewB,
             typename TRowMapDeviceViewC >
   inline void
-  range_spadd_symbolic( const THandle&,
+  range_spadd_symbolic( THandle&,
                         TRowMapDeviceViewA a_rowmap,
                         TEntriesDeviceViewA a_entries,
                         TRowMapDeviceViewB b_rowmap,
@@ -661,7 +661,7 @@ namespace diverg {
             typename TRowMapDeviceViewB, typename TEntriesDeviceViewB,
             typename TRowMapDeviceViewC, typename TEntriesDeviceViewC >
   inline void
-  range_spadd_numeric( const THandle&,
+  range_spadd_numeric( THandle&,
                        TRowMapDeviceViewA a_rowmap,
                        TEntriesDeviceViewA a_entries,
                        TRowMapDeviceViewB b_rowmap,
@@ -788,7 +788,7 @@ namespace diverg {
             typename TRowMapDeviceViewC, typename TEntriesDeviceViewC,
             typename TTimer = Kokkos::Timer >
   inline void
-  range_spadd( const THandle& handle,
+  range_spadd( THandle& handle,
                TRowMapDeviceViewA a_rowmap, TEntriesDeviceViewA a_entries,
                TRowMapDeviceViewB b_rowmap, TEntriesDeviceViewB b_entries,
                TRowMapDeviceViewC& c_rowmap, TEntriesDeviceViewC& c_entries,
@@ -892,7 +892,7 @@ namespace diverg {
             typename TRowMapDeviceViewB, typename TEntriesDeviceViewB,
             typename TRowMapDeviceViewC, typename TExecGrid >
   inline typename TRowMapDeviceViewC::value_type /* size_type */
-  _range_spgemm_symbolic( const THandle&,
+  _range_spgemm_symbolic( THandle&,
                           TRowMapDeviceViewA a_rowmap,
                           TEntriesDeviceViewA a_entries,
                           TRowMapDeviceViewB b_rowmap,
@@ -1002,7 +1002,7 @@ namespace diverg {
             typename TRowMapDeviceViewC, typename TEntriesDeviceViewC,
             typename TExecGrid >
   inline void
-  _range_spgemm_numeric( const THandle&,
+  _range_spgemm_numeric( THandle&,
                          TRowMapDeviceViewA a_rowmap,
                          TEntriesDeviceViewA a_entries,
                          TRowMapDeviceViewB b_rowmap,
@@ -1094,7 +1094,7 @@ namespace diverg {
             typename TRowMapDeviceViewC, typename TExecGrid,
             unsigned int TL1Size >
   inline typename TRowMapDeviceViewC::value_type /* size_type */
-  _range_spgemm_symbolic( const THandle& handle,
+  _range_spgemm_symbolic( THandle& handle,
                           TRowMapDeviceViewA a_rowmap,
                           TEntriesDeviceViewA a_entries,
                           TRowMapDeviceViewB b_rowmap,
@@ -1137,7 +1137,66 @@ namespace diverg {
     auto work_size = grid.team_work_size( rdensity );
     auto nof_teams = a_nrows / work_size + 1;
     auto policy = policy_type( nof_teams, team_size, vector_size );
-    hbv_type::set_scratch_size( policy, b_ncols, part );
+
+    ordinal_type band_size = 0;
+    Kokkos::parallel_reduce(
+        "diverg::crs_matrix::range_spgemm_symbolic::compute_band", policy,
+        KOKKOS_LAMBDA( const member_type& tm, ordinal_type& lband_size ) {
+          auto rank = tm.league_rank();
+          size_type a_row = rank * work_size;
+          size_type a_last_row = a_row + work_size;
+          a_last_row = DIVERG_MACRO_MIN( a_last_row, a_nrows );
+
+          ordinal_type t_band = 0;
+          Kokkos::parallel_reduce(
+              Kokkos::TeamThreadRange( tm, a_row, a_last_row ),
+              [=]( const uint64_t row, ordinal_type& lt_band ) {
+                auto a_idx = a_rowmap( row );
+                auto a_end = a_rowmap( row + 1 );
+
+                auto begin_bidx
+                    = hbv_type::compute_l1_begin_bidx( row, b_ncols );
+                // min entry (bitset aligned) in the current `row` in C
+                ordinal_type c_min = hbv_type::start_index( begin_bidx );
+                // max entry + 1 (bitset aligned) in the current `row` in C
+                ordinal_type c_max = c_min + hbv_type::l1_size();
+
+                for ( ; a_idx != a_end; a_idx += 2 ) {
+                  auto b_row = a_entries( a_idx );
+                  auto b_last_row = a_entries( a_idx + 1 );
+                  for ( ; b_row <= b_last_row; ++b_row ) {
+                    auto b_idx = b_rowmap( b_row );
+                    auto b_end = b_rowmap( b_row + 1 );
+
+                    if ( b_idx == b_end ) continue;
+
+                    // Incrementally zero-initialise bitsets in L2
+                    auto b_min = b_entries( b_idx );
+                    // Considering the initial value of c_min, `b_min < c_min`
+                    // implies that the extended range is definitely in L2.
+                    if ( b_min < c_min ) {
+                      c_min = hbv_type::aligned_index( b_min );  // update c_min
+                    }
+                    auto b_max = b_entries( b_end - 1 ) + 1;
+                    // Considering the initial value of c_max, `c_max < b_max`
+                    // implies that the extended range is definitely in L2.
+                    if ( c_max < b_max ) {
+                      c_max = hbv_type::aligned_index_ceil( b_max );  // update c_max
+                    }
+                  }
+                }
+
+                auto thr_band = c_max - c_min;  // thread band
+                if ( thr_band > lt_band ) lt_band = thr_band;
+              },
+              Kokkos::Max< ordinal_type >( t_band ) );
+
+          if ( t_band > lband_size ) lband_size = t_band;
+        },
+        Kokkos::Max< ordinal_type >( band_size ) );
+
+    handle.c_band_size = band_size;
+    hbv_type::set_scratch_size( policy, band_size, part );
 
     size_type nnz = 0;
     Kokkos::parallel_reduce(
@@ -1147,7 +1206,7 @@ namespace diverg {
           size_type a_row = rank * work_size;
           size_type a_last_row = a_row + work_size;
           a_last_row = DIVERG_MACRO_MIN( a_last_row, a_nrows );
-          hbv_type hbv( tm, b_ncols, part );
+          hbv_type hbv( tm, band_size, part );
 
           size_type t_nnz = 0;  // team nnz
           Kokkos::parallel_reduce(
@@ -1155,7 +1214,7 @@ namespace diverg {
               [ & ]( const uint64_t row, size_type& lt_nnz ) {
                 auto a_idx = a_rowmap( row );
                 auto a_end = a_rowmap( row + 1 );
-                hbv.set_l1_position( row );
+                hbv.set_l1_position( row, b_ncols );
                 // min entry (bitset aligned) in the current `row` in C
                 ordinal_type c_min = hbv.l1_begin_idx();
                 // max entry + 1 (bitset aligned) in the current `row` in C
@@ -1255,7 +1314,7 @@ namespace diverg {
             typename TRowMapDeviceViewC, typename TEntriesDeviceViewC,
             typename TExecGrid, unsigned int TL1Size >
   inline void
-  _range_spgemm_numeric( const THandle& handle,
+  _range_spgemm_numeric( THandle& handle,
                          TRowMapDeviceViewA a_rowmap,
                          TEntriesDeviceViewA a_entries,
                          TRowMapDeviceViewB b_rowmap,
@@ -1295,12 +1354,15 @@ namespace diverg {
     size_type bitset_count = grid.row_density( b_row_density, hbv_type::BITSET_WIDTH );
     auto rdensity = DIVERG_MACRO_MAX( bitset_count, hbv_type::l1_num_bitsets() );
 
+    auto band_size = handle.c_band_size;
+    DIVERG_ASSERT( band_size != 0 );
+
     auto vector_size = grid.vector_size( rdensity );
     auto team_size = grid.team_size( rdensity );
     auto work_size = grid.team_work_size( rdensity );
     auto nof_teams = a_nrows / work_size + 1;
     auto policy = policy_type( nof_teams, team_size, vector_size );
-    hbv_type::set_scratch_size( policy, b_ncols, part );
+    hbv_type::set_scratch_size( policy, band_size, part );
 
     Kokkos::parallel_for(
         "diverg::crs_matrix::range_spgemm_numeric::accumulate_hbv", policy,
@@ -1309,14 +1371,14 @@ namespace diverg {
           size_type a_row = rank * work_size;
           size_type a_last_row = a_row + work_size;
           a_last_row = DIVERG_MACRO_MIN( a_last_row, a_nrows );
-          hbv_type hbv( tm, b_ncols, part );
+          hbv_type hbv( tm, band_size, part );
 
           Kokkos::parallel_for(
               Kokkos::TeamThreadRange( tm, a_row, a_last_row ),
               [&]( const uint64_t row ) {
                 auto a_idx = a_rowmap( row );
                 auto a_end = a_rowmap( row + 1 );
-                hbv.set_l1_position( row );
+                hbv.set_l1_position( row, b_ncols );
                 // min entry (bitset aligned) in the current `row` in C
                 ordinal_type c_min = hbv.l1_begin_idx();
                 // max entry + 1 (bitset aligned) in the current `row` in C
@@ -1415,7 +1477,7 @@ namespace diverg {
             typename TRowMapDeviceViewC, typename TExecGrid,
             unsigned int TL1Size >
   inline typename TRowMapDeviceViewC::value_type /* size_type */
-  _range_spgemm_symbolic( const THandle& handle,
+  _range_spgemm_symbolic( THandle& handle,
                           TRowMapDeviceViewA a_rowmap,
                           TEntriesDeviceViewA a_entries,
                           TRowMapDeviceViewB b_rowmap,
@@ -1570,7 +1632,7 @@ namespace diverg {
             typename TRowMapDeviceViewC, typename TEntriesDeviceViewC,
             typename TExecGrid, unsigned int TL1Size >
   inline void
-  _range_spgemm_numeric( const THandle& handle,
+  _range_spgemm_numeric( THandle& handle,
                          TRowMapDeviceViewA a_rowmap,
                          TEntriesDeviceViewA a_entries,
                          TRowMapDeviceViewB b_rowmap,
@@ -1735,7 +1797,7 @@ namespace diverg {
             typename TRowMapDeviceViewC, typename TExecGrid,
             unsigned int TL1Size >
   inline typename TRowMapDeviceViewC::value_type /* size_type */
-  _range_spgemm_symbolic( const THandle& handle,
+  _range_spgemm_symbolic( THandle& handle,
                           TRowMapDeviceViewA a_rowmap,
                           TEntriesDeviceViewA a_entries,
                           TRowMapDeviceViewB b_rowmap,
@@ -1912,7 +1974,7 @@ namespace diverg {
             typename TRowMapDeviceViewC, typename TEntriesDeviceViewC,
             typename TExecGrid, unsigned int TL1Size >
   inline void
-  _range_spgemm_numeric( const THandle& handle,
+  _range_spgemm_numeric( THandle& handle,
                          TRowMapDeviceViewA a_rowmap,
                          TEntriesDeviceViewA a_entries,
                          TRowMapDeviceViewB b_rowmap,
@@ -2099,7 +2161,7 @@ namespace diverg {
             typename TRowMapDeviceViewC, typename TExecGrid,
             unsigned int TL1Size >
   inline typename TRowMapDeviceViewC::value_type /* size_type */
-  _range_spgemm_symbolic( const THandle& handle,
+  _range_spgemm_symbolic( THandle& handle,
                           TRowMapDeviceViewA a_rowmap,
                           TEntriesDeviceViewA a_entries,
                           TRowMapDeviceViewB b_rowmap,
@@ -2268,7 +2330,7 @@ namespace diverg {
             typename TRowMapDeviceViewC, typename TEntriesDeviceViewC,
             typename TExecGrid, unsigned int TL1Size >
   inline void
-  _range_spgemm_numeric( const THandle& handle,
+  _range_spgemm_numeric( THandle& handle,
                          TRowMapDeviceViewA a_rowmap,
                          TEntriesDeviceViewA a_entries,
                          TRowMapDeviceViewB b_rowmap,
@@ -2439,7 +2501,7 @@ namespace diverg {
             typename TRowMapDeviceViewC,
             typename TSparseConfig=DefaultSparseConfiguration >
   inline typename TRowMapDeviceViewC::value_type /* size_type */
-  range_spgemm_symbolic( const THandle& handle,
+  range_spgemm_symbolic( THandle& handle,
                          TRowMapDeviceViewA a_rowmap,
                          TEntriesDeviceViewA a_entries,
                          TRowMapDeviceViewB b_rowmap,
@@ -2467,7 +2529,7 @@ namespace diverg {
             typename TRowMapDeviceViewC, typename TEntriesDeviceViewC,
             typename TSparseConfig=DefaultSparseConfiguration >
   inline void
-  range_spgemm_numeric( const THandle& handle,
+  range_spgemm_numeric( THandle& handle,
                         TRowMapDeviceViewA a_rowmap, TEntriesDeviceViewA a_entries,
                         TRowMapDeviceViewB b_rowmap, TEntriesDeviceViewB b_entries,
                         TRowMapDeviceViewC c_rowmap, TEntriesDeviceViewC& c_entries,
@@ -2499,7 +2561,7 @@ namespace diverg {
             typename TSparseConfig=DefaultSparseConfiguration,
             typename TTimer = Kokkos::Timer >
   inline typename TRowMapDeviceViewC::value_type /* size_type */
-  range_spgemm( const THandle& handle,
+  range_spgemm( THandle& handle,
                 TRowMapDeviceViewA a_rowmap, TEntriesDeviceViewA a_entries,
                 TRowMapDeviceViewB b_rowmap, TEntriesDeviceViewB b_entries,
                 TRowMapDeviceViewC& c_rowmap, TEntriesDeviceViewC& c_entries,
@@ -2622,7 +2684,7 @@ namespace diverg {
             typename TSparseConfig = DefaultSparseConfiguration,
             typename TTimer = Kokkos::Timer >
   inline typename TRowMapDeviceViewC::value_type /* size_type */
-  range_power_inplace( const THandle& h1,
+  range_power_inplace( THandle& h1,
                        TRowMapDeviceViewA& a_rowmap, TEntriesDeviceViewA& a_entries,
                        TRowMapDeviceViewC& c_rowmap, TEntriesDeviceViewC& c_entries,
                        unsigned int k, TSparseConfig config={},

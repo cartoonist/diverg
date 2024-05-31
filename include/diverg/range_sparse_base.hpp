@@ -508,17 +508,20 @@ namespace diverg {
       this->b_ncols = b.numCols();
       this->a_nnz = a.nnz();
       this->b_nnz = b.nnz();
+      this->c_band_size = 0;
     }
 
     SparseRangeHandle( ordinal_type ncols_a, size_type nnz_a,
                        ordinal_type ncols_b, size_type nnz_b )
-      : a_ncols( ncols_a ), b_ncols( ncols_b ), a_nnz( nnz_a ), b_nnz( nnz_b )
+        : a_ncols( ncols_a ), b_ncols( ncols_b ), a_nnz( nnz_a ),
+          b_nnz( nnz_b ), c_band_size( 0 )
     { }
     /* === DATA MEMBERS === */
     ordinal_type a_ncols;
     ordinal_type b_ncols;
     size_type a_nnz;
     size_type b_nnz;
+    size_type c_band_size;
   };
 
   template<
