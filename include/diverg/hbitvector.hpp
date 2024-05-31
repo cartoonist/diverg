@@ -98,9 +98,15 @@ namespace diverg {
   using GetHBVAccessLevelType = typename GetHBVAccessLevel< TPartition >::type;
 
   /**
-   *  @brief  Hierarchical (two-level) bit vector
+   *  @brief  Banded Hierarchical (two-level) bit vector
    *
    *  @tparam  TL1_Size Size of the first level bit vector (faster)
+   *
+   *  NOTE: This class implements *banded* hbitvector centring around the given
+   *  'centre' index. The specified size when constructing is the size of the
+   *  band that includes L1 rather than the whole bitvector. The hbitvector
+   *  only checks whether the accessed bits are within the band and there is no
+   *  check or knowledge for the actual size of the vector.
    *
    *  The arrangement of two bit arrays for each level is shown below:
    *
@@ -152,13 +158,16 @@ namespace diverg {
       static_assert( ( TL1_Size <= std::numeric_limits< size_type >::max() ), "L1 size cannot fit in size type" );
       /* === DATA MEMBERS === */
       //size_type m_size;         //!< Size of the bit vector
-      size_type m_x_size;       //!< Allocated size in bits (always a multiple of `BITSET_WIDTH`)
-      size_type m_num_bitsets;  //!< Total number of bitsets
+      size_type m_x_size;       //!< Allocated *BANDED* size in bits (always a multiple of `BITSET_WIDTH`)
+      size_type m_num_bitsets;  //!< Total number of bitsets in *BANDED* form
       size_type l1_begin_bidx;  //!< Bitset index of the first bitset in L1 (inclusive)
       size_type l1_begin;       //!< Index of the first bit reside in L1 (inclusive)
       view_type l1_data;        //!< First level bit vector view
       view_type l2_data;        //!< Second level bit vector view
     private:
+      /**
+       *  NOTE: For banded hbitvector, `n` should be band size.
+       */
       KOKKOS_FUNCTION
       HBitVector( const member_type& tm, size_type n )
           : /*m_size( n ),*/ l1_begin_bidx( 0 ), l1_begin( 0 ),
@@ -169,8 +178,7 @@ namespace diverg {
       }
 
       KOKKOS_INLINE_FUNCTION void
-      allocate_data( const member_type& tm, size_type n,
-                     HBVAccessLevel< TeamLevel > )
+      allocate_data( const member_type& tm, HBVAccessLevel< TeamLevel > )
       {
         auto l1size = HBitVector::l1_scratch_size();
         this->l1_data = ( view_type )
@@ -183,8 +191,7 @@ namespace diverg {
       }
 
       KOKKOS_INLINE_FUNCTION void
-      allocate_data( const member_type& tm, size_type n,
-                     HBVAccessLevel< ThreadLevel > )
+      allocate_data( const member_type& tm, HBVAccessLevel< ThreadLevel > )
       {
         auto l1size = HBitVector::l1_scratch_size();
         this->l1_data = ( view_type )
@@ -197,23 +204,52 @@ namespace diverg {
       }
     public:
       /* === LIFECYCLE === */
+      /**
+       *  @brief Constructor for NON-banded hbitvector
+       *
+       *  @param tm     Kokkos team member
+       *  @param n      Actual size
+       *  @param centre Center index
+       *  @param tag    Access level tag
+       */
       template< typename TSpec >
       KOKKOS_FUNCTION
       HBitVector( const member_type& tm, size_type n, size_type centre,
                   HBVAccessLevel< TSpec > access_level_tag )
           : HBitVector( tm, n )
       {
-        this->allocate_data( tm, n, access_level_tag );
-        this->set_l1_position( centre );
+        this->allocate_data( tm, access_level_tag );
+        this->set_l1_position( centre, n );
       }
 
+      /**
+       *  @brief Constructor for banded hbitvector
+       *
+       *  @param tm     Kokkos team member
+       *  @param dim    HBitvector dimensions: (banded size, actual size)
+       *  @param centre Center index
+       *  @param tag    Access level tag
+       */
+      template< typename TSpec >
+      KOKKOS_FUNCTION
+      HBitVector( const member_type& tm, std::pair< size_type, size_type > dim,
+                  size_type centre, HBVAccessLevel< TSpec > access_level_tag )
+          : HBitVector( tm, dim.first /* banded size */ )
+      {
+        this->allocate_data( tm, access_level_tag );
+        this->set_l1_position( centre, dim.second /* actual size */ );
+      }
+
+      /**
+       *  NOTE: For banded hbitvector, `n` should be band size.
+       */
       template< typename TSpec >
       KOKKOS_FUNCTION
       HBitVector( const member_type& tm, size_type n,
                   HBVAccessLevel< TSpec > access_level_tag )
           : HBitVector( tm, n )
       {
-        this->allocate_data( tm, n, access_level_tag );
+        this->allocate_data( tm, access_level_tag );
       }
 
       template< typename TSpec >
@@ -226,34 +262,42 @@ namespace diverg {
 
       template< typename TSpec >
       KOKKOS_FUNCTION
+      HBitVector( const member_type& tm, std::pair< size_type, size_type > dim,
+                  size_type centre, ExecPartition< TSpec > )
+          : HBitVector( tm, dim, centre,
+                        GetHBVAccessLevelType< ExecPartition< TSpec > >{} )
+      { }
+
+      template< typename TSpec >
+      KOKKOS_FUNCTION
       HBitVector( const member_type& tm, size_type n, ExecPartition< TSpec > )
           : HBitVector( tm, n,
                         GetHBVAccessLevelType< ExecPartition< TSpec > >{} )
       { }
-
-      KOKKOS_INLINE_FUNCTION void
-      set_l1_position( size_type centre )
+      /* === STATIC MEMBERS === */
+      static KOKKOS_INLINE_FUNCTION size_type
+      compute_l1_begin_bidx( size_type centre, size_type actual_size )
       {
-        assert( centre < this->m_x_size );
+        auto x_size = HBitVector::aligned_size( actual_size );
+        auto num_bitsets = HBitVector::bindex( x_size );
+
+        assert( centre < x_size );
+
         auto ctr_bidx = HBitVector::bindex( centre );
         // The begin index is set such that the L1 range would be (inclusive):
         //   [ctr_bidx-(L1_NUM_BITSETS/2)+1...ctr_bidx+(L1_NUM_BITSETS/2)]
-        if ( L1_NUM_BITSETS < this->m_num_bitsets ) {
+        if ( L1_NUM_BITSETS < num_bitsets ) {
           // lflank: L1 left flank size relative to centre
           auto lflank = ( L1_NUM_BITSETS >> 1 ) - 1;
           // rfit_bidx: right-most bitset index fitting the whole L1
-          auto rfit_bidx = this->m_num_bitsets - L1_NUM_BITSETS;
+          auto rfit_bidx = num_bitsets - L1_NUM_BITSETS;
           auto pb_bidx = ( ( ctr_bidx > lflank ) ? ( ctr_bidx - lflank ) : 0 );
           // for values of `centre` being closer to the end, l1 covers the last `TL1_Size` bits
-          this->l1_begin_bidx = Kokkos::min( rfit_bidx, pb_bidx );
-          this->l1_begin = HBitVector::start_index( this->l1_begin_bidx );
+          return Kokkos::min( rfit_bidx, pb_bidx );
         }
-        else {
-          this->l1_begin_bidx = 0;
-          this->l1_begin = 0;
-        }
+        return 0;
       }
-      /* === STATIC MEMBERS === */
+
       /**
        *   @brief Get bitset index of the bit at `idx`
        *
@@ -627,6 +671,14 @@ namespace diverg {
       {
         return this->l1_begin;
       }
+      /* === MUTATORS === */
+      KOKKOS_INLINE_FUNCTION void
+      set_l1_position( size_type centre, size_type actual_size )
+      {
+        this->l1_begin_bidx
+            = HBitVector::compute_l1_begin_bidx( centre, actual_size );
+        this->l1_begin = HBitVector::start_index( this->l1_begin_bidx );
+      }
       /* === METHODS === */
       /**
        *   @brief Returns the allocated size (L1+L2) in bytes
@@ -955,9 +1007,8 @@ namespace diverg {
       KOKKOS_INLINE_FUNCTION void
       set( size_type idx, HBVThreadAccess< Safe > ) noexcept
       {
-        assert( idx < this->m_x_size );
-
         auto r_idx = this->relative_idx( idx );
+        assert( r_idx < this->m_x_size );
         auto r_bidx = HBitVector::bindex( r_idx );
         auto mask = BITSET_ONE << HBitVector::boffset( r_idx );
 
@@ -983,9 +1034,8 @@ namespace diverg {
       KOKKOS_INLINE_FUNCTION std::enable_if_t< !std::is_same< TSpec, Safe >::value >
       set( size_type idx, HBVThreadAccess< TSpec > ) noexcept
       {
-        assert( idx < this->m_x_size );
-
         auto r_idx = this->relative_idx( idx );
+        assert( r_idx < this->m_x_size );
         auto r_bidx = HBitVector::bindex( r_idx );
         auto mask = BITSET_ONE << HBitVector::boffset( r_idx );
 
@@ -1017,7 +1067,6 @@ namespace diverg {
             HBVThreadAccess< Safe > tag ) noexcept
       {
         assert( s_idx <= f_idx );
-        assert( f_idx < this->m_x_size );
 
         if ( s_idx == f_idx ) {
           Kokkos::single( Kokkos::PerThread( tm ), [=]() {
@@ -1028,6 +1077,8 @@ namespace diverg {
 
         auto rs_idx = this->relative_idx( s_idx );
         auto rf_idx = this->relative_idx( f_idx );
+
+        assert( rf_idx < this->m_x_size );
 
         auto setbits =
           [&tm]( auto data_ptr, auto ls_idx, auto lf_idx ) {
@@ -1106,7 +1157,6 @@ namespace diverg {
             HBVThreadAccess< UnsafeAtBoundaries > tag ) noexcept
       {
         assert( s_idx <= f_idx );
-        assert( f_idx < this->m_x_size );
 
         if ( s_idx == f_idx ) {
           Kokkos::single( Kokkos::PerThread( tm ), [=]() {
@@ -1117,6 +1167,8 @@ namespace diverg {
 
         auto rs_idx = this->relative_idx( s_idx );
         auto rf_idx = this->relative_idx( f_idx );
+
+        assert( rf_idx < this->m_x_size );
 
         auto setbits =
           [&tm]( auto data_ptr, auto ls_idx, auto lf_idx ) {
@@ -1192,7 +1244,6 @@ namespace diverg {
             HBVThreadAccess< Unsafe > tag ) noexcept
       {
         assert( s_idx <= f_idx );
-        assert( f_idx < this->m_x_size );
 
         if ( s_idx == f_idx ) {
           Kokkos::single( Kokkos::PerThread( tm ), [=]() {
@@ -1203,6 +1254,8 @@ namespace diverg {
 
         auto rs_idx = this->relative_idx( s_idx );
         auto rf_idx = this->relative_idx( f_idx );
+
+        assert( rf_idx < this->m_x_size );
 
         auto setbits =
           [&tm]( auto data_ptr, auto ls_idx, auto lf_idx ) {
