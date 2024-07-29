@@ -95,7 +95,7 @@ def dot2gfa(input, k, fasta, output):
             f.write(f'S\t{u+1}\t{vertexLabels[u]}\n')
             if u in out_index:
                 for v in out_index[u]:
-                    f.write(f'L\t{u}\t+\t{v}\t+\t0M\n')
+                    f.write(f'L\t{u+1}\t+\t{v+1}\t+\t0M\n')
 
 
 if __name__ == '__main__':
