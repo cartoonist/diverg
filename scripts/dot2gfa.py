@@ -40,16 +40,15 @@ def get_out_neighbours(edges):
 @click.command()
 @click.option('-k', type=int, default=25, show_default=True,
               help='k-mer size')
-@click.option('--fasta-pos-file', '-p', type=click.Path(exists=True),
-              help='FASTA position file (output of splitMEM)')
 @click.option('--fasta', '-f', type=click.Path(exists=True),
               help='FASTA file')
 @click.option('--output', '-o', type=click.Path(), default="output.gfa",
               show_default=True, help='Output GFA file')
 @click.argument('input', type=click.Path(exists=True))
-def dot2gfa(input, k, fasta_pos_file, fasta, output):
+def dot2gfa(input, k, fasta, output):
     """Convert output of splitMEM in DOT format to GFA1 format."""
     lpos = list()
+    fasta_pos_file = input + "fastaPos.txt"
     with open(fasta_pos_file, 'r') as f:
         lpos = [int(l.strip()) for l in f]
 
