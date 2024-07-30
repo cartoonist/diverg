@@ -1,7 +1,6 @@
 #!/usr/bin/env python3
 
 import click
-import bisect
 import re
 from Bio import SeqIO
 
@@ -46,12 +45,9 @@ def get_out_neighbours(edges):
 @click.argument('input', type=click.Path(exists=True))
 def dot2gfa(input, k, fasta, skip_loops, output):
     """Convert output of splitMEM in DOT format to GFA1 format."""
-    lpos = list()
-    fasta_pos_file = input + "fastaPos.txt"
-    with open(fasta_pos_file, 'r') as f:
-        lpos = [int(l.strip()) for l in f]
-
-    lrec = [str(r.seq) for r in SeqIO.parse(fasta, "fasta")]
+    # NOTE: splitMEM add a "N" at the end of each FASTA entry
+    seqs = 'N'.join([str(rec.seq) for rec in SeqIO.parse(fasta, "fasta")]) + 'N'
+    seqs = re.sub(r'[^ACGTNacgtn]', 'N', seqs)  # get rid of ambiguous bases
 
     vertexLabels = list()
     edges = list()
@@ -68,16 +64,8 @@ def dot2gfa(input, k, fasta, skip_loops, output):
                 label_range = tokens[1][8:-2].split(',')[-1].split(':')
                 pos = int(label_range[0])
                 length = int(label_range[1])
-                idx = bisect.bisect_left(lpos, position + 1) - 1
-                offset = position - lpos[idx]
-                # NOTE: replace N with A, as splitMEM does
-                seq = re.sub(r'[N]', 'A', lrec[idx])
-                # NOTE: splitMEM add a "N" at the end of each FASTA entry
-                seq += "N"
-                subseq = seq[offset:offset + length]
-                subseq = re.sub(r'[^ACGTN\$]', '', subseq)  #get rid of ambiguous character
-                subseq = re.sub(r'[\$]', 'N', subseq)       # get rid of ambiguous characters
-                vertexLabels.append(subseq)
+                label = seqs[pos:pos + length]
+                vertexLabels.append(label)
             elif len(tokens) == 3:
                 if tokens[1] == "->":  # must be an edge
                     assert int(tokens[0]) == currentVertexId
