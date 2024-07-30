@@ -40,10 +40,11 @@ def get_out_neighbours(edges):
 @click.command()
 @click.option('-k', type=int, default=25, show_default=True, help='k-mer size')
 @click.option('--fasta', '-f', type=click.Path(exists=True), help='FASTA file')
+@click.option('--skip-loops', '-s', is_flag=True, help="Skip self-loops")
 @click.option('--output', '-o', type=click.Path(), default="output.gfa",
               show_default=True, help='Output GFA file')
 @click.argument('input', type=click.Path(exists=True))
-def dot2gfa(input, k, fasta, output):
+def dot2gfa(input, k, fasta, skip_loops, output):
     """Convert output of splitMEM in DOT format to GFA1 format."""
     lpos = list()
     fasta_pos_file = input + "fastaPos.txt"
@@ -91,10 +92,17 @@ def dot2gfa(input, k, fasta, output):
     with open(output, 'w') as f:
         f.write('H\tVN:Z:1.0\n')
         for u in range(len(vertexLabels)):
-            f.write(f'S\t{u+1}\t{vertexLabels[u]}\n')
+            seg_label = vertexLabels[u]
+            if not seg_label:
+                print(f"[WARN] Missing sequence for {u+1} (assuming 'N')")
+                seg_label = "N"
+            f.write(f'S\t{u+1}\t{seg_label}\n')
             if u in out_index:
                 for v in out_index[u]:
-                    f.write(f'L\t{u+1}\t+\t{v+1}\t+\t0M\n')
+                    if u == v and skip_loops:
+                        print(f"[WARN] Skipped loop {u+1} -> {v+1}")
+                    else:
+                        f.write(f'L\t{u+1}\t+\t{v+1}\t+\t0M\n')
 
 
 if __name__ == '__main__':
