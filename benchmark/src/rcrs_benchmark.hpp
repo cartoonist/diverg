@@ -279,41 +279,42 @@ TGraph
 load_graph( std::string const& graph_path, std::string const& format )
 {
   TGraph graph;
+  typename TGraph::dynamic_type dyn_graph;
 
-  auto load_versioned_gfa = []( auto& graph, auto& graph_path, bool sorted,
+  auto load_versioned_gfa = []( auto& dyn_graph, auto& graph_path, bool sorted,
                                 auto version ) {
-    using dynamic_type =
-        typename std::remove_reference_t< decltype( graph ) >::dynamic_type;
     std::ifstream ifs( graph_path, std::ifstream::in | std::ifstream::binary );
     gfak::GFAKluge gg;
     gg.set_version( version );
     std::cout << "Parsing input graph (GFAKluge)..." << std::endl;
     gg.parse_gfa_file( ifs );
-    dynamic_type dyn_graph;
     std::cout << "Constructing a Dynamic graph (gum)..." << std::endl;
     gum::util::extend( dyn_graph, gg, sorted );
-    std::cout << "Converting to a Succinct graph (gum)..." << std::endl;
-    graph = dyn_graph;
   };
 
   if ( format == "gfa" ) {
     std::cout << "Auto-detecting GFA version..." << std::endl;
-    gum::util::load_gfa( graph, graph_path, true );
+    gum::util::load_gfa( dyn_graph, graph_path, true );
   }
   else if ( format == "gfa1" ) {
     std::cout << "Enforcing GFA version 1.0..." << std::endl;
-    load_versioned_gfa( graph, graph_path, true, 1.0 );
+    load_versioned_gfa( dyn_graph, graph_path, true, 1.0 );
   }
   else if ( format == "gfa2" ) {
     std::cout << "Enforcing GFA version 2.0..." << std::endl;
-    load_versioned_gfa( graph, graph_path, true, 2.0 );
+    load_versioned_gfa( dyn_graph, graph_path, true, 2.0 );
   }
   else if ( format == "" ) {
     std::cout << "Auto-detecting graph file format..." << std::endl;
-    gum::util::load( graph, graph_path, true );
+    gum::util::load( dyn_graph, graph_path, true );
   }
   else
     throw std::runtime_error( "[ERROR] unknown file format '" + format + "'" );
+
+  std::cout << "Sorting node to minimise index breaks (gum)..." << std::endl;
+  gum::util::min_breaks_sort( dyn_graph );
+  std::cout << "Converting to a Succinct graph (gum)..." << std::endl;
+  graph = dyn_graph;
 
   return graph;
 }
