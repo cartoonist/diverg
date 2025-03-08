@@ -13,7 +13,7 @@ endif()
 configure_file(src/test_config.hpp.in ${PROJECT_BINARY_DIR}/test/src/test_config.hpp @ONLY)
 
 # Default compile option
-set(DIVERG_TESTS_DEFAULT_CXXOPS -g -Wall -Wpedantic)
+set(DIVERG_TESTS_DEFAULT_CXXOPS -g -Wall -Wpedantic -Wno-c++20-extensions)
 # Default link option
 set(DIVERG_TESTS_DEFAULT_LDOPS)
 
