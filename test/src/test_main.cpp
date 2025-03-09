@@ -55,13 +55,7 @@ CATCH_REGISTER_LISTENER( MyEventListener )
 
 int main( int argc, char* argv[] )
 {
-  /*
-  // For debugging
-  Kokkos::InitializationSettings args;
-  args.set_num_threads( 1 );
-  Kokkos::initialize( args );
-  */
-  Kokkos::initialize();
+  Kokkos::initialize( argc, argv );
 
   int result = Catch::Session().run( argc, argv );
 
