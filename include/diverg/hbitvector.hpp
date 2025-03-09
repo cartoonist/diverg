@@ -220,7 +220,7 @@ namespace diverg {
       KOKKOS_FUNCTION
       HBitVector( const member_type& tm, size_type n, size_type centre,
                   ExecPartition< TSpec > )
-          : HBitVector( tm, n,
+          : HBitVector( tm, n, centre,
                         GetHBVAccessLevelType< ExecPartition< TSpec > >{} )
       { }
 
