@@ -1766,7 +1766,7 @@ namespace diverg {
         throw std::runtime_error( "index out of range" );
       }
 
-      this->operator()( i, j );
+      return this->operator()( i, j );
     }
 
     /**
@@ -1779,7 +1779,7 @@ namespace diverg {
         throw std::runtime_error( "index out of range" );
       }
 
-      this->operator()( i, j );
+      return this->operator()( i, j );
     }
 
     template< typename TCrsMatrixBase >
