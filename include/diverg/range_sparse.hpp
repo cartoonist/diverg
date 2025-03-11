@@ -1222,7 +1222,7 @@ namespace diverg {
               [ & ]( const uint64_t row, size_type& lt_nnz ) {
                 auto a_idx = a_rowmap( row );
                 auto a_end = a_rowmap( row + 1 );
-                hbv.set_l1_position( row, b_ncols );
+                hbv.set_l1_centre_at( row, b_ncols );
                 // min entry (bitset aligned) in the current `row` in C
                 ordinal_type c_min = hbv.l1_begin_idx();
                 // max entry + 1 (bitset aligned) in the current `row` in C
@@ -1386,7 +1386,7 @@ namespace diverg {
               [&]( const uint64_t row ) {
                 auto a_idx = a_rowmap( row );
                 auto a_end = a_rowmap( row + 1 );
-                hbv.set_l1_position( row, b_ncols );
+                hbv.set_l1_centre_at( row, b_ncols );
                 // min entry (bitset aligned) in the current `row` in C
                 ordinal_type c_min = hbv.l1_begin_idx();
                 // max entry + 1 (bitset aligned) in the current `row` in C

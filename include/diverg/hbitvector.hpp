@@ -219,7 +219,7 @@ namespace diverg {
           : HBitVector( tm, n )
       {
         this->allocate_data( tm, access_level_tag );
-        this->set_l1_position( centre, n );
+        this->set_l1_centre_at( centre, n );
       }
 
       /**
@@ -237,7 +237,7 @@ namespace diverg {
           : HBitVector( tm, dim.first /* banded size */ )
       {
         this->allocate_data( tm, access_level_tag );
-        this->set_l1_position( centre, dim.second /* actual size */ );
+        this->set_l1_centre_at( centre, dim.second /* actual size */ );
       }
 
       /**
@@ -673,11 +673,18 @@ namespace diverg {
       }
       /* === MUTATORS === */
       KOKKOS_INLINE_FUNCTION void
-      set_l1_position( size_type centre, size_type actual_size )
+      set_l1_centre_at( size_type centre, size_type actual_size )
       {
         this->l1_begin_bidx
             = HBitVector::compute_l1_begin_bidx( centre, actual_size );
         this->l1_begin = HBitVector::start_index( this->l1_begin_bidx );
+      }
+
+      KOKKOS_INLINE_FUNCTION void
+      set_l1_at( size_type idx )
+      {
+        this->l1_begin = HBitVector::aligned_index( idx );
+        this->l1_begin_bidx = HBitVector::bindex( idx );
       }
       /* === METHODS === */
       /**
