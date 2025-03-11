@@ -494,30 +494,39 @@ namespace diverg {
 
   using DefaultSparseConfiguration = SparseConfig< grid::Auto, HBitVectorAccumulator<> >;
 
-  template< typename TRCRSMatrix >
+  template< typename TRCRSMatrix, typename TExecSpace >
   struct SparseRangeHandle {
     /* === MEMBERS TYPES === */
     using ordinal_type = typename TRCRSMatrix::ordinal_type;
     using size_type = typename TRCRSMatrix::size_type;
+    using execution_space = TExecSpace;
+    using entries_device_view_type =
+        typename TRCRSMatrix::template entries_device_view_type< execution_space >;
     /* === LIFECYCLE === */
     SparseRangeHandle() = delete;
 
-    SparseRangeHandle( TRCRSMatrix const& a, TRCRSMatrix const& b )
+    SparseRangeHandle( TRCRSMatrix const& a, TRCRSMatrix const& b, TExecSpace={} )
         : a_ncols( a.numCols() ), b_ncols( b.numCols() ), a_nnz( a.nnz() ),
-          b_nnz( b.nnz() ), c_band_size( 0 )
+          b_nnz( b.nnz() ), c_band_size( 0 ), c_min_col_index()
     { }
 
     SparseRangeHandle( ordinal_type ncols_a, size_type nnz_a,
-                       ordinal_type ncols_b, size_type nnz_b )
+                       ordinal_type ncols_b, size_type nnz_b, TExecSpace={} )
         : a_ncols( ncols_a ), b_ncols( ncols_b ), a_nnz( nnz_a ),
-          b_nnz( nnz_b ), c_band_size( 0 )
+          b_nnz( nnz_b ), c_band_size( 0 ), c_min_col_index()
     { }
+    /* === METHODS === */
+    inline void init_c_min_col_index( size_type nrows )
+    {
+      this->c_min_col_index = entries_device_view_type( "c_min_col_index", nrows );
+    }
     /* === DATA MEMBERS === */
     ordinal_type a_ncols;
     ordinal_type b_ncols;
     size_type a_nnz;
     size_type b_nnz;
     size_type c_band_size;
+    entries_device_view_type c_min_col_index;
   };
 
   template<

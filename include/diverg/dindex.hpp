@@ -310,7 +310,7 @@ namespace diverg {
       using rcrsmatrix_t = TRCRSMatrix;
       using config_type = TSparseConfig;
       using execution_space = typename config_type::execution_space;
-      using handle_t = SparseRangeHandle< TRCRSMatrix >;
+      using handle_t = SparseRangeHandle< TRCRSMatrix, execution_space >;
       using size_type = typename rcrsmatrix_t::size_type;
       using rcrs_spec_type = typename rcrsmatrix_t::spec_type;
       using group_type = typename crs_matrix::Group< rcrs_spec_type >::type;

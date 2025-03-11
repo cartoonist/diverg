@@ -865,7 +865,7 @@ namespace diverg {
     auto c_entries = range_crsmatrix_t::make_entries_device_view( space );
     auto c_rowmap = range_crsmatrix_t::make_rowmap_device_view( space );
 
-    SparseRangeHandle handle( a, b );
+    SparseRangeHandle handle( a, b, space );
 
     range_spadd( handle, a_rowmap, a_entries, b_rowmap, b_entries, c_rowmap,
                  c_entries );
@@ -2653,7 +2653,7 @@ namespace diverg {
     auto c_entries = range_crsmatrix_t::make_entries_device_view( config.space );
     auto c_rowmap = range_crsmatrix_t::make_rowmap_device_view( config.space );
 
-    SparseRangeHandle handle( a, b );
+    SparseRangeHandle handle( a, b, config.space );
 
     auto nnz = range_spgemm( handle, a_rowmap, a_entries, b_rowmap, b_entries,
                              c_rowmap, c_entries, config );
@@ -2671,7 +2671,6 @@ namespace diverg {
   range_power( TRCRSMatrix const& a, unsigned int k, TSparseConfig config = {} )
   {
     typedef TRCRSMatrix rcrsmatrix_t;
-    typedef SparseRangeHandle< rcrsmatrix_t > handle_t;
 
     auto a_entries = a.entries_device_view( config.space );
     auto a_rowmap = a.rowmap_device_view( config.space );
@@ -2679,7 +2678,7 @@ namespace diverg {
     auto c_entries = rcrsmatrix_t::make_entries_device_view( config.space );
     auto c_rowmap = rcrsmatrix_t::make_rowmap_device_view( config.space );
 
-    handle_t handle( a, a );
+    SparseRangeHandle handle( a, a, config.space );
     auto nnz = range_power_inplace( handle, a_rowmap, a_entries, c_rowmap,
                                     c_entries, k, config );
 
