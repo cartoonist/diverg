@@ -1138,71 +1138,75 @@ namespace diverg {
     auto nof_teams = a_nrows / work_size + 1;
     auto policy = policy_type( nof_teams, team_size, vector_size );
 
-    ordinal_type band_size = 0;
+    ordinal_type gc_min;
+    ordinal_type gc_max;
+    handle.init_c_min_col_index( a_nrows );
     Kokkos::parallel_reduce(
         "diverg::crs_matrix::range_spgemm_symbolic::compute_band", policy,
-        KOKKOS_LAMBDA( const member_type& tm, ordinal_type& lband_size ) {
+        KOKKOS_LAMBDA( const member_type& tm, ordinal_type& tc_min,
+                       ordinal_type& tc_max ) {
           auto rank = tm.league_rank();
           size_type a_row = rank * work_size;
           size_type a_last_row = a_row + work_size;
           a_last_row = DIVERG_MACRO_MIN( a_last_row, a_nrows );
-
-          ordinal_type t_band = 0;
+          ordinal_type ltc_min;
+          ordinal_type ltc_max;
           Kokkos::parallel_reduce(
               Kokkos::TeamThreadRange( tm, a_row, a_last_row ),
-              [=]( const uint64_t row, ordinal_type& lt_band ) {
+              [=]( const uint64_t row, ordinal_type& rc_min,
+                     ordinal_type& rc_max ) {
                 auto a_idx = a_rowmap( row );
                 auto a_end = a_rowmap( row + 1 );
 
-                auto begin_bidx
-                    = hbv_type::compute_l1_begin_bidx( row, b_ncols );
-                // min entry (bitset aligned) in the current `row` in C
-                ordinal_type c_min = hbv_type::start_index( begin_bidx );
-                // max entry + 1 (bitset aligned) in the current `row` in C
-                ordinal_type c_max = c_min + hbv_type::l1_size();
-
+                ordinal_type lrc_min = std::numeric_limits< ordinal_type >::max();
+                ordinal_type lrc_max = std::numeric_limits< ordinal_type >::min();
                 for ( ; a_idx != a_end; a_idx += 2 ) {
                   auto b_row = a_entries( a_idx );
                   auto b_last_row = a_entries( a_idx + 1 );
-                  ordinal_type tc_min;
-                  ordinal_type tc_max;
+                  ordinal_type prc_min;
+                  ordinal_type prc_max;
                   Kokkos::parallel_reduce(
                       Kokkos::ThreadVectorRange( tm, b_row, b_last_row + 1 ),
-                      [=]( const uint64_t j, ordinal_type& ltc_min,
-                           ordinal_type& ltc_max ) {
+                      [=]( const uint64_t j, ordinal_type& brc_min,
+                             ordinal_type& brc_max ) {
                         auto b_idx = b_rowmap( j );
                         auto b_end = b_rowmap( j + 1 );
 
                         if ( b_idx == b_end ) {
-                          ltc_min = std::numeric_limits< ordinal_type >::max();
-                          ltc_max = std::numeric_limits< ordinal_type >::min();
+                          brc_min = std::numeric_limits< ordinal_type >::max();
+                          brc_max = std::numeric_limits< ordinal_type >::min();
                           return;
                         }
 
                         auto b_min = b_entries( b_idx );
-                        if ( b_min < ltc_min ) {
-                          ltc_min = hbv_type::aligned_index( b_min );
+                        if ( b_min < brc_min ) {
+                          brc_min = hbv_type::aligned_index( b_min );
                         }
                         auto b_max = b_entries( b_end - 1 ) + 1;
-                        if ( ltc_max < b_max ) {
-                          ltc_max = hbv_type::aligned_index_ceil( b_max );
+                        if ( brc_max < b_max ) {
+                          brc_max = hbv_type::aligned_index_ceil( b_max );
                         }
                       },
-                      Kokkos::Min< ordinal_type >( tc_min ),
-                      Kokkos::Max< ordinal_type >( tc_max ) );
-                  if ( tc_min < c_min ) c_min = tc_min;
-                  if ( tc_max > c_max ) c_max = tc_max;
+                      Kokkos::Min< ordinal_type >( prc_min ),
+                      Kokkos::Max< ordinal_type >( prc_max ) );
+                  if ( prc_min < lrc_min ) lrc_min = prc_min;
+                  if ( prc_max > lrc_max ) lrc_max = prc_max;
                 }
-
-                auto thr_band = c_max - c_min;  // thread band
-                if ( thr_band > lt_band ) lt_band = thr_band;
+                Kokkos::single( Kokkos::PerThread( tm ), [=]() {
+                  handle.c_min_col_index( row ) = DIVERG_MACRO_MIN( lrc_min, b_ncols );
+                } );
+                if ( lrc_min < rc_min ) rc_min = lrc_min;
+                if ( lrc_max > rc_max ) rc_max = lrc_max;
               },
-              Kokkos::Max< ordinal_type >( t_band ) );
-
-          if ( t_band > lband_size ) lband_size = t_band;
+              Kokkos::Min< ordinal_type >( ltc_min ),
+              Kokkos::Max< ordinal_type >( ltc_max ) );
+          if ( ltc_min < tc_min ) tc_min = ltc_min;
+          if ( ltc_max > tc_max ) tc_max = ltc_max;
         },
-        Kokkos::Max< ordinal_type >( band_size ) );
+        Kokkos::Min< ordinal_type >( gc_min ),
+        Kokkos::Max< ordinal_type >( gc_max ) );
 
+    ordinal_type band_size = ( gc_min < gc_max ) ? gc_max - gc_min : hbv_type::L1_SIZE;
     handle.c_band_size = band_size;
     hbv_type::set_scratch_size( policy, band_size, part );
 
@@ -1222,7 +1226,7 @@ namespace diverg {
               [ & ]( const uint64_t row, size_type& lt_nnz ) {
                 auto a_idx = a_rowmap( row );
                 auto a_end = a_rowmap( row + 1 );
-                hbv.set_l1_centre_at( row, b_ncols );
+                hbv.set_l1_at( handle.c_min_col_index( row ) );
                 // min entry (bitset aligned) in the current `row` in C
                 ordinal_type c_min = hbv.l1_begin_idx();
                 // max entry + 1 (bitset aligned) in the current `row` in C
@@ -1357,7 +1361,6 @@ namespace diverg {
 
     auto a_nrows = a_rowmap.extent( 0 ) - 1;
     auto b_nrows = b_rowmap.extent( 0 ) - 1;
-    auto b_ncols = handle.b_ncols;
     auto b_row_density = grid.row_density( handle.b_nnz, b_nrows );
     size_type bitset_count = grid.row_density( b_row_density, hbv_type::BITSET_WIDTH );
     auto rdensity = DIVERG_MACRO_MAX( bitset_count, hbv_type::l1_num_bitsets() );
@@ -1386,7 +1389,7 @@ namespace diverg {
               [&]( const uint64_t row ) {
                 auto a_idx = a_rowmap( row );
                 auto a_end = a_rowmap( row + 1 );
-                hbv.set_l1_centre_at( row, b_ncols );
+                hbv.set_l1_at( handle.c_min_col_index( row ) );
                 // min entry (bitset aligned) in the current `row` in C
                 ordinal_type c_min = hbv.l1_begin_idx();
                 // max entry + 1 (bitset aligned) in the current `row` in C
