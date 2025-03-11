@@ -15,6 +15,10 @@ if(DIVERG_STRICT_ON_WARNS)
   list(APPEND DIVERG_BENCHMARK_DEFAULT_CXXOPS -Werror)
 endif(DIVERG_STRICT_ON_WARNS)
 
+if(DIVERG_ENABLE_CUDA)
+  list(APPEND DIVERG_TESTS_DEFAULT_CXXOPS -Wno-deprecated-gpu-targets)
+endif(DIVERG_ENABLE_CUDA)
+
 # Defining target 'rcrs_benchmark': Range CRS matrix operations benchmark
 set(RCRS_BENCH_SOURCES "src/rcrs_benchmark.cpp")
 add_executable(rcrs_benchmark ${RCRS_BENCH_SOURCES})

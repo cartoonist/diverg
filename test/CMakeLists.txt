@@ -21,6 +21,10 @@ if(DIVERG_STRICT_ON_WARNS)
   list(APPEND DIVERG_TESTS_DEFAULT_CXXOPS -Werror)
 endif(DIVERG_STRICT_ON_WARNS)
 
+if(DIVERG_ENABLE_CUDA)
+  list(APPEND DIVERG_TESTS_DEFAULT_CXXOPS -Wno-deprecated-gpu-targets)
+endif(DIVERG_ENABLE_CUDA)
+
 # Defining target diverg-tests
 file(GLOB TEST_SOURCES "src/*.cpp")
 add_executable(diverg-tests ${TEST_SOURCES})
