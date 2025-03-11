@@ -1164,26 +1164,34 @@ namespace diverg {
                 for ( ; a_idx != a_end; a_idx += 2 ) {
                   auto b_row = a_entries( a_idx );
                   auto b_last_row = a_entries( a_idx + 1 );
-                  for ( ; b_row <= b_last_row; ++b_row ) {
-                    auto b_idx = b_rowmap( b_row );
-                    auto b_end = b_rowmap( b_row + 1 );
+                  ordinal_type tc_min;
+                  ordinal_type tc_max;
+                  Kokkos::parallel_reduce(
+                      Kokkos::ThreadVectorRange( tm, b_row, b_last_row + 1 ),
+                      [=]( const uint64_t j, ordinal_type& ltc_min,
+                           ordinal_type& ltc_max ) {
+                        auto b_idx = b_rowmap( j );
+                        auto b_end = b_rowmap( j + 1 );
 
-                    if ( b_idx == b_end ) continue;
+                        if ( b_idx == b_end ) {
+                          ltc_min = std::numeric_limits< ordinal_type >::max();
+                          ltc_max = std::numeric_limits< ordinal_type >::min();
+                          return;
+                        }
 
-                    // Incrementally zero-initialise bitsets in L2
-                    auto b_min = b_entries( b_idx );
-                    // Considering the initial value of c_min, `b_min < c_min`
-                    // implies that the extended range is definitely in L2.
-                    if ( b_min < c_min ) {
-                      c_min = hbv_type::aligned_index( b_min );  // update c_min
-                    }
-                    auto b_max = b_entries( b_end - 1 ) + 1;
-                    // Considering the initial value of c_max, `c_max < b_max`
-                    // implies that the extended range is definitely in L2.
-                    if ( c_max < b_max ) {
-                      c_max = hbv_type::aligned_index_ceil( b_max );  // update c_max
-                    }
-                  }
+                        auto b_min = b_entries( b_idx );
+                        if ( b_min < ltc_min ) {
+                          ltc_min = hbv_type::aligned_index( b_min );
+                        }
+                        auto b_max = b_entries( b_end - 1 ) + 1;
+                        if ( ltc_max < b_max ) {
+                          ltc_max = hbv_type::aligned_index_ceil( b_max );
+                        }
+                      },
+                      Kokkos::Min< ordinal_type >( tc_min ),
+                      Kokkos::Max< ordinal_type >( tc_max ) );
+                  if ( tc_min < c_min ) c_min = tc_min;
+                  if ( tc_max > c_max ) c_max = tc_max;
                 }
 
                 auto thr_band = c_max - c_min;  // thread band
