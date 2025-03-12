@@ -1091,8 +1091,7 @@ namespace diverg {
             typename TRowMapDeviceViewA, typename TEntriesDeviceViewA,
             typename TRowMapDeviceViewB, typename TEntriesDeviceViewB,
             typename TExecGrid, unsigned int TL1Size >
-  inline std::pair< typename TEntriesDeviceViewA::non_const_value_type,
-                    typename TEntriesDeviceViewA::non_const_value_type >
+  inline typename TEntriesDeviceViewA::non_const_value_type
   rspgemm_compute_band( THandle& handle,
                         TRowMapDeviceViewA a_rowmap,
                         TEntriesDeviceViewA a_entries,
@@ -1120,7 +1119,6 @@ namespace diverg {
 
     auto a_nrows = a_rowmap.extent( 0 ) - 1;
     auto b_nrows = b_rowmap.extent( 0 ) - 1;
-    auto b_ncols = handle.b_ncols;
     auto b_row_density = grid.row_density( handle.b_nnz, b_nrows );
     size_type bitset_count = grid.row_density( b_row_density, hbv_type::BITSET_WIDTH );
     auto rdensity = DIVERG_MACRO_MAX( bitset_count, hbv_type::l1_num_bitsets() );
@@ -1131,23 +1129,19 @@ namespace diverg {
     auto nof_teams = a_nrows / work_size + 1;
     auto policy = policy_type( nof_teams, team_size, vector_size );
 
-    ordinal_type gc_min;
-    ordinal_type gc_max;
+    ordinal_type bandwidth;
     handle.init_c_min_col_index( a_nrows );
     Kokkos::parallel_reduce(
         "diverg::crs_matrix::range_spgemm_symbolic::compute_band", policy,
-        KOKKOS_LAMBDA( const member_type& tm, ordinal_type& tc_min,
-                       ordinal_type& tc_max ) {
+        KOKKOS_LAMBDA( const member_type& tm, ordinal_type& t_bandwidth ) {
           auto rank = tm.league_rank();
           size_type a_row = rank * work_size;
           size_type a_last_row = a_row + work_size;
           a_last_row = DIVERG_MACRO_MIN( a_last_row, a_nrows );
-          ordinal_type ltc_min;
-          ordinal_type ltc_max;
+          ordinal_type lt_bandwidth;
           Kokkos::parallel_reduce(
               Kokkos::TeamThreadRange( tm, a_row, a_last_row ),
-              [=]( const uint64_t row, ordinal_type& rc_min,
-                     ordinal_type& rc_max ) {
+              [ = ]( const uint64_t row, ordinal_type& r_bandwidth ) {
                 auto a_idx = a_rowmap( row );
                 auto a_end = a_rowmap( row + 1 );
 
@@ -1186,21 +1180,20 @@ namespace diverg {
                   if ( prc_max > lrc_max ) lrc_max = prc_max;
                 }
                 Kokkos::single( Kokkos::PerThread( tm ), [=]() {
-                  handle.c_min_col_index( row ) = DIVERG_MACRO_MIN( lrc_min, b_ncols );
+                  handle.c_min_col_index( row )
+                      = ( lrc_min < lrc_max ) ? lrc_min : 0;
                 } );
-                if ( lrc_min < rc_min ) rc_min = lrc_min;
-                if ( lrc_max > rc_max ) rc_max = lrc_max;
+                auto lr_bandwidth = ( lrc_min < lrc_max ) ? lrc_max - lrc_min
+                                                          : hbv_type::L1_SIZE;
+                if ( lr_bandwidth > r_bandwidth ) r_bandwidth = lr_bandwidth;
               },
-              Kokkos::Min< ordinal_type >( ltc_min ),
-              Kokkos::Max< ordinal_type >( ltc_max ) );
-          if ( ltc_min < tc_min ) tc_min = ltc_min;
-          if ( ltc_max > tc_max ) tc_max = ltc_max;
+              Kokkos::Max< ordinal_type >( lt_bandwidth ) );
+          if ( lt_bandwidth > t_bandwidth ) t_bandwidth = lt_bandwidth;
         },
-        Kokkos::Min< ordinal_type >( gc_min ),
-        Kokkos::Max< ordinal_type >( gc_max ) );
+        Kokkos::Max< ordinal_type >( bandwidth ) );
 
-    if ( gc_min < gc_max ) return { gc_min, gc_max };
-    return { 0, hbv_type::L1_SIZE };
+    assert( bandwidth >= hbv_type::L1_SIZE );
+    return bandwidth;
   }
 
   /**
@@ -1260,14 +1253,11 @@ namespace diverg {
     auto nof_teams = a_nrows / work_size + 1;
     auto policy = policy_type( nof_teams, team_size, vector_size );
 
-    ordinal_type gc_min;
-    ordinal_type gc_max;
-    std::tie( gc_min, gc_max )
+    ordinal_type bandwidth
         = rspgemm_compute_band( handle, a_rowmap, a_entries, b_rowmap,
                                 b_entries, grid, part, acc_tag );
-    ordinal_type band_size = gc_max - gc_min;
-    handle.c_band_size = band_size;
-    hbv_type::set_scratch_size( policy, band_size, part );
+    handle.c_bandwidth = bandwidth;
+    hbv_type::set_scratch_size( policy, bandwidth, part );
 
     size_type nnz = 0;
     Kokkos::parallel_reduce(
@@ -1277,7 +1267,7 @@ namespace diverg {
           size_type a_row = rank * work_size;
           size_type a_last_row = a_row + work_size;
           a_last_row = DIVERG_MACRO_MIN( a_last_row, a_nrows );
-          hbv_type hbv( tm, band_size, part );
+          hbv_type hbv( tm, bandwidth, part );
 
           size_type t_nnz = 0;  // team nnz
           Kokkos::parallel_reduce(
@@ -1424,15 +1414,15 @@ namespace diverg {
     size_type bitset_count = grid.row_density( b_row_density, hbv_type::BITSET_WIDTH );
     auto rdensity = DIVERG_MACRO_MAX( bitset_count, hbv_type::l1_num_bitsets() );
 
-    auto band_size = handle.c_band_size;
-    DIVERG_ASSERT( band_size != 0 );
+    auto bandwidth = handle.c_bandwidth;
+    DIVERG_ASSERT( bandwidth != 0 );
 
     auto vector_size = grid.vector_size( rdensity );
     auto team_size = grid.team_size( rdensity );
     auto work_size = grid.team_work_size( rdensity );
     auto nof_teams = a_nrows / work_size + 1;
     auto policy = policy_type( nof_teams, team_size, vector_size );
-    hbv_type::set_scratch_size( policy, band_size, part );
+    hbv_type::set_scratch_size( policy, bandwidth, part );
 
     Kokkos::parallel_for(
         "diverg::crs_matrix::range_spgemm_numeric::accumulate_hbv", policy,
@@ -1441,7 +1431,7 @@ namespace diverg {
           size_type a_row = rank * work_size;
           size_type a_last_row = a_row + work_size;
           a_last_row = DIVERG_MACRO_MIN( a_last_row, a_nrows );
-          hbv_type hbv( tm, band_size, part );
+          hbv_type hbv( tm, bandwidth, part );
 
           Kokkos::parallel_for(
               Kokkos::TeamThreadRange( tm, a_row, a_last_row ),

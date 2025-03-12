@@ -507,13 +507,13 @@ namespace diverg {
 
     SparseRangeHandle( TRCRSMatrix const& a, TRCRSMatrix const& b, TExecSpace={} )
         : a_ncols( a.numCols() ), b_ncols( b.numCols() ), a_nnz( a.nnz() ),
-          b_nnz( b.nnz() ), c_band_size( 0 ), c_min_col_index()
+          b_nnz( b.nnz() ), c_bandwidth( 0 ), c_min_col_index()
     { }
 
     SparseRangeHandle( ordinal_type ncols_a, size_type nnz_a,
                        ordinal_type ncols_b, size_type nnz_b, TExecSpace={} )
         : a_ncols( ncols_a ), b_ncols( ncols_b ), a_nnz( nnz_a ),
-          b_nnz( nnz_b ), c_band_size( 0 ), c_min_col_index()
+          b_nnz( nnz_b ), c_bandwidth( 0 ), c_min_col_index()
     { }
     /* === METHODS === */
     inline void init_c_min_col_index( size_type nrows )
@@ -525,7 +525,7 @@ namespace diverg {
     ordinal_type b_ncols;
     size_type a_nnz;
     size_type b_nnz;
-    size_type c_band_size;
+    size_type c_bandwidth;
     entries_device_view_type c_min_col_index;
   };
 
