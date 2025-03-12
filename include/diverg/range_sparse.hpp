@@ -1183,8 +1183,9 @@ namespace diverg {
                   handle.c_min_col_index( row )
                       = ( lrc_min < lrc_max ) ? lrc_min : 0;
                 } );
-                auto lr_bandwidth = ( lrc_min < lrc_max ) ? lrc_max - lrc_min
-                                                          : hbv_type::L1_SIZE;
+                ordinal_type lr_bandwidth = ( lrc_min < lrc_max )
+                                                ? lrc_max - lrc_min
+                                                : hbv_type::L1_SIZE;
                 if ( lr_bandwidth > r_bandwidth ) r_bandwidth = lr_bandwidth;
               },
               Kokkos::Max< ordinal_type >( lt_bandwidth ) );
