@@ -1081,35 +1081,33 @@ namespace diverg {
   }
 
   /**
-   *  @brief Symbolic phase of computing matrix c as the product of a and b
-   *  (ThreadSequentialPartition-HBitVectorAccumulator specialisation).
+   *  @brief Compute off-diagonal band of matrix c as the product of a and b
+   *  (ThreadSequentialPartition specialisation).
    *
    *  NOTE: All matrices are assumed to be in Range CRS format.
-   *  NOTE: This function assumes `c_rowmap` is allocated on device and is of size
-   *  `a.numRows()+1`.
+   *  NOTE: The band extremities are aligned to the bitset width.
    */
   template< typename THandle,
             typename TRowMapDeviceViewA, typename TEntriesDeviceViewA,
             typename TRowMapDeviceViewB, typename TEntriesDeviceViewB,
-            typename TRowMapDeviceViewC, typename TExecGrid,
-            unsigned int TL1Size >
-  inline typename TRowMapDeviceViewC::value_type /* size_type */
-  _range_spgemm_symbolic( THandle& handle,
-                          TRowMapDeviceViewA a_rowmap,
-                          TEntriesDeviceViewA a_entries,
-                          TRowMapDeviceViewB b_rowmap,
-                          TEntriesDeviceViewB b_entries,
-                          TRowMapDeviceViewC& c_rowmap,
-                          TExecGrid grid,
-                          ThreadSequentialPartition part,
-                          HBitVectorAccumulator< TL1Size > )
+            typename TExecGrid, unsigned int TL1Size >
+  inline std::pair< typename TEntriesDeviceViewA::non_const_value_type,
+                    typename TEntriesDeviceViewA::non_const_value_type >
+  rspgemm_compute_band( THandle& handle,
+                        TRowMapDeviceViewA a_rowmap,
+                        TEntriesDeviceViewA a_entries,
+                        TRowMapDeviceViewB b_rowmap,
+                        TEntriesDeviceViewB b_entries,
+                        TExecGrid grid,
+                        ThreadSequentialPartition part,
+                        HBitVectorAccumulator< TL1Size > )
   {
     typedef TEntriesDeviceViewA a_entries_type;
     typedef TEntriesDeviceViewB b_entries_type;
-    typedef TRowMapDeviceViewC  c_row_map_type;
+    typedef TRowMapDeviceViewA  a_row_map_type;
     typedef typename a_entries_type::non_const_value_type ordinal_type;
-    typedef typename c_row_map_type::value_type size_type;
-    typedef typename c_row_map_type::execution_space execution_space;
+    typedef typename a_row_map_type::non_const_value_type size_type;
+    typedef typename a_row_map_type::execution_space execution_space;
     typedef Kokkos::TeamPolicy< execution_space > policy_type;
     typedef typename policy_type::member_type member_type;
     typedef diverg::HBitVector< TL1Size, execution_space > hbv_type;
@@ -1118,11 +1116,6 @@ namespace diverg {
     static_assert(
         std::is_same< typename a_entries_type::memory_space,
                       typename b_entries_type::memory_space >::value,
-        "both entries and row map views should be in the same memory space" );
-
-    static_assert(
-        std::is_same< typename a_entries_type::memory_space,
-                      typename c_row_map_type::memory_space >::value,
         "both entries and row map views should be in the same memory space" );
 
     auto a_nrows = a_rowmap.extent( 0 ) - 1;
@@ -1206,7 +1199,73 @@ namespace diverg {
         Kokkos::Min< ordinal_type >( gc_min ),
         Kokkos::Max< ordinal_type >( gc_max ) );
 
-    ordinal_type band_size = ( gc_min < gc_max ) ? gc_max - gc_min : hbv_type::L1_SIZE;
+    if ( gc_min < gc_max ) return { gc_min, gc_max };
+    return { 0, hbv_type::L1_SIZE };
+  }
+
+  /**
+   *  @brief Symbolic phase of computing matrix c as the product of a and b
+   *  (ThreadSequentialPartition-HBitVectorAccumulator specialisation).
+   *
+   *  NOTE: All matrices are assumed to be in Range CRS format.
+   *  NOTE: This function assumes `c_rowmap` is allocated on device and is of size
+   *  `a.numRows()+1`.
+   */
+  template< typename THandle,
+            typename TRowMapDeviceViewA, typename TEntriesDeviceViewA,
+            typename TRowMapDeviceViewB, typename TEntriesDeviceViewB,
+            typename TRowMapDeviceViewC, typename TExecGrid,
+            unsigned int TL1Size >
+  inline typename TRowMapDeviceViewC::value_type /* size_type */
+  _range_spgemm_symbolic( THandle& handle,
+                          TRowMapDeviceViewA a_rowmap,
+                          TEntriesDeviceViewA a_entries,
+                          TRowMapDeviceViewB b_rowmap,
+                          TEntriesDeviceViewB b_entries,
+                          TRowMapDeviceViewC& c_rowmap,
+                          TExecGrid grid,
+                          ThreadSequentialPartition part,
+                          HBitVectorAccumulator< TL1Size > acc_tag )
+  {
+    typedef TEntriesDeviceViewA a_entries_type;
+    typedef TEntriesDeviceViewB b_entries_type;
+    typedef TRowMapDeviceViewC  c_row_map_type;
+    typedef typename a_entries_type::non_const_value_type ordinal_type;
+    typedef typename c_row_map_type::value_type size_type;
+    typedef typename c_row_map_type::execution_space execution_space;
+    typedef Kokkos::TeamPolicy< execution_space > policy_type;
+    typedef typename policy_type::member_type member_type;
+    typedef diverg::HBitVector< TL1Size, execution_space > hbv_type;
+
+    // TODO: Extend static asserts to all views
+    static_assert(
+        std::is_same< typename a_entries_type::memory_space,
+                      typename b_entries_type::memory_space >::value,
+        "both entries and row map views should be in the same memory space" );
+
+    static_assert(
+        std::is_same< typename a_entries_type::memory_space,
+                      typename c_row_map_type::memory_space >::value,
+        "both entries and row map views should be in the same memory space" );
+
+    auto a_nrows = a_rowmap.extent( 0 ) - 1;
+    auto b_nrows = b_rowmap.extent( 0 ) - 1;
+    auto b_row_density = grid.row_density( handle.b_nnz, b_nrows );
+    size_type bitset_count = grid.row_density( b_row_density, hbv_type::BITSET_WIDTH );
+    auto rdensity = DIVERG_MACRO_MAX( bitset_count, hbv_type::l1_num_bitsets() );
+
+    auto vector_size = grid.vector_size( rdensity );
+    auto team_size = grid.team_size( rdensity );
+    auto work_size = grid.team_work_size( rdensity );
+    auto nof_teams = a_nrows / work_size + 1;
+    auto policy = policy_type( nof_teams, team_size, vector_size );
+
+    ordinal_type gc_min;
+    ordinal_type gc_max;
+    std::tie( gc_min, gc_max )
+        = rspgemm_compute_band( handle, a_rowmap, a_entries, b_rowmap,
+                                b_entries, grid, part, acc_tag );
+    ordinal_type band_size = gc_max - gc_min;
     handle.c_band_size = band_size;
     hbv_type::set_scratch_size( policy, band_size, part );
 
