@@ -5,10 +5,12 @@ Scalable Distance Index for Validation of Paired-End Alignments in Sequence Grap
 
 This is an implementation of DiVerG method introduced in:
 
-> A. Ghaffaari, T. Marschall, and A. Schoenhuth.
-> "DiVerG: Scalable Distance Index for Validation of Paired-End Alignments in Sequence Graphs", 2024
+> Ali Ghaffaari, Alexander Schönhuth, and Tobias Marschall.<br>
+> *DiVerG: Scalable Distance Index for Validation of Paired-End Alignments in Sequence Graphs.*
+> In 25th International Conference on Algorithms for Bioinformatics (WABI 2025).
+> Leibniz International Proceedings in Informatics (LIPIcs), Volume 344, pp. 10:1-10:24,
 >
-> [manuscript](./doc/diverg-manuscript.pdf)
+> [DOI: 10.4230/LIPIcs.WABI.2025.10](https://doi.org/10.4230/LIPIcs.WABI.2025.10)
 
 ### Introduction
 
@@ -19,7 +21,7 @@ range $[d_1, d_2]$. This problem is motivated by the need in paired-end read
 mapping to sequence graph to verify distance constraints between candidate
 alignments.
 
-It introduces a compact data structure for representing Boolean sparse matrices,
+DiVerG introduces a compact data structure for representing Boolean sparse matrices,
 as well as a fast and scalable algorithm for computing matrix-matrix
 multiplication and addition using the compressed representation on CUDA and
 OpenMP backends.
