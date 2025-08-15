@@ -1,0 +1,59 @@
+cff-version: 1.2.0
+message: "If you use this software, please cite it as below."
+type: software
+title: "diverg"
+version: "1.0"
+date-released: "2025-03-13"
+url: "https://github.com/cartoonist/diverg"
+repository-code: "https://github.com/cartoonist/diverg"
+abstract: "DiVerG is a scalable C++ header-only library that creates distance indexes for sequence graphs to efficiently validate paired-end read alignments. It provides compact data structures for Boolean sparse matrices and fast matrix-matrix multiplication algorithms for CUDA and OpenMP backends, overcoming the limitations of PairG by improving scalability and space efficiency."
+license: MIT
+authors:
+  - given-names: "Ali"
+    family-names: "Ghaffaari"
+    email: "ali.ghaffaari@uni-bielefeld.de"
+    orcid: "https://orcid.org/0000-0002-0540-6515"
+    affiliation: "Bielefeld University"
+  - given-names: "Tobias"
+    family-names: "Marschall"
+    email: "tobias.marschall@hhu.de"
+    orcid: "https://orcid.org/0000-0002-9376-1030"
+    affiliation: "Heinrich Heine University Düsseldorf"
+  - given-names: "Alexander"
+    family-names: "Schoenhuth"
+    email: "aschoen@cebitec.uni-bielefeld.de"
+    orcid: "https://orcid.org/0000-0003-3529-0856"
+    affiliation: "Bielefeld University"
+keywords:
+  - "bioinformatics"
+  - "sequence graphs"
+  - "paired-end alignments"
+  - "distance index"
+  - "sparse matrices"
+  - "CUDA"
+  - "OpenMP"
+identifiers:
+  - description: "The versioned DOI for version 1.0 of the software."
+    type: doi
+    value: 10.4230/artifacts.23650
+preferred-citation:
+  type: article
+  title: "DiVerG: A Scalable Distance Index for Validation of Paired-End Alignments in Sequence Graphs"
+  doi: "10.4230/LIPIcs.WABI.2025.10"
+  url: "https://doi.org/10.4230/LIPIcs.WABI.2025.10"
+  authors:
+    - given-names: "Ali"
+      family-names: "Ghaffaari"
+      email: "ali.ghaffaari@uni-bielefeld.de"
+      orcid: "https://orcid.org/0000-0002-0540-6515"
+      affiliation: "Bielefeld University"
+    - given-names: "Tobias"
+      family-names: "Marschall"
+      email: "tobias.marschall@hhu.de"
+      orcid: "https://orcid.org/0000-0002-9376-1030"
+      affiliation: "Heinrich Heine University Düsseldorf"
+    - given-names: "Alexander"
+      family-names: "Schoenhuth"
+      email: "aschoen@cebitec.uni-bielefeld.de"
+      orcid: "https://orcid.org/0000-0003-3529-0856"
+      affiliation: "Bielefeld University"

@@ -1,0 +1,42 @@
+AUTHORS
+=======
+
+This file lists all persons who have contributed to the DiVerG project.
+
+Author and Developer
+--------------------
+Ali Ghaffaari <ali.ghaffaari@uni-bielefeld.de>
+  ORCID: https://orcid.org/0000-0002-0540-6515
+  Affiliation: Bielefeld University
+  Roles: Conceptualisation, Software Development, Drafting and finalising the manuscript
+
+Research Contributors
+---------------------
+Tobias Marschall
+  ORCID: https://orcid.org/0000-0002-9376-1030
+  Affiliation: Heinrich Heine University Düsseldorf
+  Roles: Principal investigator, Ideation, Drafting and finalising the manuscript
+
+Alexander Schönhuth  
+  ORCID: https://orcid.org/0000-0003-3529-0856
+  Affiliation: Bielefeld University
+  Roles: Principal investigator, Ideation, Drafting and finalising the manuscript
+
+Acknowledgments
+---------------
+This work builds upon the PairG method and utilises the Kokkos/KokkosKernels
+framework for parallel computing, as well as the gum library for sequence graph
+utilities, and sdsl-lite bit manipulation utilities (include/diverg/bits.hpp) by
+Simon Gog.
+
+For citation purposes, please refer to:
+
+Ali Ghaffaari, Alexander Schönhuth, and Tobias Marschall.
+"DiVerG: Scalable Distance Index for Validation of Paired-End Alignments in Sequence Graphs".
+In 25th International Conference on Algorithms for Bioinformatics (WABI 2025).
+Leibniz International Proceedings in Informatics (LIPIcs), Volume 344, pp. 10:1-10:24,
+https://doi.org/10.4230/LIPIcs.WABI.2025.10
+
+---
+This AUTHORS file follows Software Heritage guidelines for research software attribution.
+For questions about contributions, please contact: ali.ghaffaari@uni-bielefeld.de

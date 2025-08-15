@@ -1,0 +1,65 @@
+{
+  "@context": [
+    "https://doi.org/10.5063/schema/codemeta-2.0",
+    "http://schema.org"
+  ],
+  "@type": "SoftwareSourceCode",
+  "license": "https://spdx.org/licenses/MIT",
+  "codeRepository": "git+https://github.com/cartoonist/diverg.git",
+  "issueTracker": "https://github.com/cartoonist/diverg/issues",
+  "datePublished": "2025-03-13",
+  "dateModified": "2025-08-16",
+  "name": "diverg",
+  "description": "DiVerG is a scalable C++ header-only library that creates distance indexes for sequence graphs to efficiently validate paired-end read alignments. It provides compact data structures for Boolean sparse matrices and fast matrix-matrix multiplication algorithms for CUDA and OpenMP backends, overcoming the limitations of PairG by improving scalability and space efficiency.",
+  "version": "1.0",
+  "applicationCategory": "Bioinformatics, Bioinformatics Library, Bioinformatics CLI Tool, Scientific Software",
+  "referencePublication": "https://doi.org/10.4230/LIPIcs.WABI.2025.10",
+  "identifier": "https://doi.org/10.4230/artifacts.23650",
+  "developmentStatus": "active",
+  "programmingLanguage": [
+    "C++",
+    "R",
+    "Python"
+  ],
+  "operatingSystem": [
+    "Linux",
+    "MacOS"
+  ],
+  "author": [
+    {
+      "@type": "Person",
+      "@id": "https://orcid.org/0000-0002-0540-6515",
+      "givenName": "Ali",
+      "familyName": "Ghaffaari",
+      "email": "ali.ghaffaari@uni-bielefeld.de",
+      "affiliation": {
+        "@type": "Organization",
+        "name": "Bielefeld University"
+      }
+    }
+  ],
+  "contributor": [
+    {
+      "@type": "Person",
+      "@id" : "https://orcid.org/0000-0002-9376-1030",
+      "givenName": "Tobias",
+      "familyName": "Marschall",
+      "email": "tobias.marschall@hhu.de",
+      "affiliation": {
+        "@type": "Organization",
+        "name": "Heinrich Heine University Düsseldorf"
+      }
+    },
+    {
+      "@type": "Person",
+      "@id": "https://orcid.org/0000-0003-3529-0856",
+      "givenName": "Alexander",
+      "familyName": "Schoenhuth",
+      "email": "aschoen@cebitec.uni-bielefeld.de",
+      "affiliation": {
+        "@type": "Organization",
+        "name": "Bielefeld University"
+      }
+    }
+  ]
+}
