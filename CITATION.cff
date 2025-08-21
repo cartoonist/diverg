@@ -14,16 +14,16 @@ authors:
     email: "ali.ghaffaari@uni-bielefeld.de"
     orcid: "https://orcid.org/0000-0002-0540-6515"
     affiliation: "Bielefeld University"
-  - given-names: "Tobias"
-    family-names: "Marschall"
-    email: "tobias.marschall@hhu.de"
-    orcid: "https://orcid.org/0000-0002-9376-1030"
-    affiliation: "Heinrich Heine University Düsseldorf"
   - given-names: "Alexander"
     family-names: "Schoenhuth"
     email: "aschoen@cebitec.uni-bielefeld.de"
     orcid: "https://orcid.org/0000-0003-3529-0856"
     affiliation: "Bielefeld University"
+  - given-names: "Tobias"
+    family-names: "Marschall"
+    email: "tobias.marschall@hhu.de"
+    orcid: "https://orcid.org/0000-0002-9376-1030"
+    affiliation: "Heinrich Heine University Düsseldorf"
 keywords:
   - "bioinformatics"
   - "sequence graphs"
@@ -40,7 +40,7 @@ preferred-citation:
   type: article
   title: "DiVerG: A Scalable Distance Index for Validation of Paired-End Alignments in Sequence Graphs"
   doi: "10.4230/LIPIcs.WABI.2025.10"
-  url: "https://doi.org/10.4230/LIPIcs.WABI.2025.10"
+  url: "https://drops.dagstuhl.de/entities/document/10.4230/LIPIcs.WABI.2025.10"
   authors:
     - given-names: "Ali"
       family-names: "Ghaffaari"
@@ -57,3 +57,26 @@ preferred-citation:
       email: "tobias.marschall@hhu.de"
       orcid: "https://orcid.org/0000-0002-9376-1030"
       affiliation: "Heinrich Heine University Düsseldorf"
+  collection-title: "Leibniz International Proceedings in Informatics (LIPIcs)"
+  collection-type: proceedings
+  conference:
+    name: "International Conference on Algorithms for Bioinformatics (WABI)"
+  editors:
+    - given-names: "Broňa"
+      family-names: "Brejová"
+    - given-names: "Rob"
+      family-names: "Patro"
+  pages: "10:1--10:24"
+  year: 2025
+  volume: "344"
+  volume-title: "25th International Conference on Algorithms for Bioinformatics (WABI 2025)"
+  isbn: "978-3-95977-386-7"
+  issn: "1868-8969"
+  publisher:
+    name: "Schloss Dagstuhl -- Leibniz-Zentrum für Informatik"
+    address: "Dagstuhl, Germany"
+  keywords:
+    - "sequence graph"
+    - "distance index"
+    - "read mapping"
+    - "sparse matrix"
