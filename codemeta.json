@@ -41,17 +41,6 @@
   "contributor": [
     {
       "@type": "Person",
-      "@id" : "https://orcid.org/0000-0002-9376-1030",
-      "givenName": "Tobias",
-      "familyName": "Marschall",
-      "email": "tobias.marschall@hhu.de",
-      "affiliation": {
-        "@type": "Organization",
-        "name": "Heinrich Heine University Düsseldorf"
-      }
-    },
-    {
-      "@type": "Person",
       "@id": "https://orcid.org/0000-0003-3529-0856",
       "givenName": "Alexander",
       "familyName": "Schoenhuth",
@@ -59,6 +48,17 @@
       "affiliation": {
         "@type": "Organization",
         "name": "Bielefeld University"
+      }
+    },
+    {
+      "@type": "Person",
+      "@id" : "https://orcid.org/0000-0002-9376-1030",
+      "givenName": "Tobias",
+      "familyName": "Marschall",
+      "email": "tobias.marschall@hhu.de",
+      "affiliation": {
+        "@type": "Organization",
+        "name": "Heinrich Heine University Düsseldorf"
       }
     }
   ]
