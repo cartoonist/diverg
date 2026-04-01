@@ -17,7 +17,7 @@
 #include <KokkosSparse_spgemm.hpp>
 #include <KokkosSparse_spadd.hpp>
 #include <gum/graph.hpp>
-#include <gum/gfa_utils.hpp>
+#include <gum/io_utils.hpp>
 #include <diverg/range_sparse.hpp>
 #include <diverg/dindex.hpp>
 #include <string>

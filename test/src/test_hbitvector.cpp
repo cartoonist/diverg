@@ -20,7 +20,6 @@
 #include <diverg/hbitvector.hpp>
 #include <diverg/crs_matrix.hpp>
 #include <diverg/random.hpp>
-#include <gum/gfa_utils.hpp>
 #include <KokkosSparse_CrsMatrix.hpp>
 
 #include "test_base.hpp"
