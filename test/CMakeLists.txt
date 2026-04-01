@@ -32,9 +32,7 @@ target_compile_options(diverg-tests PRIVATE ${DIVERG_TESTS_DEFAULT_CXXOPS})
 target_link_options(diverg-tests PRIVATE ${DIVERG_TESTS_DEFAULT_LDOPS})
 target_include_directories(diverg-tests
   PRIVATE ${PROJECT_BINARY_DIR}/test/src
-  # TODO: use diverg::libdiverg
-  PRIVATE diverg::libdiverg_headers)
+  PRIVATE diverg::diverg)
 target_link_libraries(diverg-tests
   PRIVATE Catch2::Catch2
-  # TODO: use diverg::libdiverg
-  PRIVATE diverg::libdiverg_headers)
+  PRIVATE diverg::diverg)

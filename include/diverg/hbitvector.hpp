@@ -16,8 +16,8 @@
  *  See LICENSE file for more information.
  */
 
-#ifndef DIVERG_HBITVECTOR_HPP_
-#define DIVERG_HBITVECTOR_HPP_
+#ifndef DIVERG_HBITVECTOR_HPP__
+#define DIVERG_HBITVECTOR_HPP__
 
 #include <climits>
 #include <cstdint>
@@ -1337,5 +1337,8 @@ namespace diverg {
   };
 }  /* --- end of namespace diverg --- */
 
+#ifndef DIVERG_HBITVECTOR_ETI_INST__
+#  include <diverg/eti/hbitvector.hpp>
+#endif
 
-#endif // DIVERG_HBITVECTOR_HPP_
+#endif // DIVERG_HBITVECTOR_HPP__

@@ -13,8 +13,8 @@
  *  See LICENSE file for more information.
  */
 
-#ifndef DIVERG_RANGE_SPARSE_BASE_HPP_
-#define DIVERG_RANGE_SPARSE_BASE_HPP_
+#ifndef DIVERG_RANGE_SPARSE_BASE_HPP__
+#define DIVERG_RANGE_SPARSE_BASE_HPP__
 
 #include <cstddef>
 #include <stdexcept>
@@ -809,4 +809,4 @@ namespace diverg {
   };
   #endif
 }  // namespace diverg
-#endif  // DIVERG_RANGE_SPARSE_BASE_HPP_
+#endif  // DIVERG_RANGE_SPARSE_BASE_HPP__

@@ -5,8 +5,19 @@ find_dependency(Kokkos REQUIRED)
 find_dependency(KokkosKernels REQUIRED)
 find_dependency(gum REQUIRED)
 
-if(NOT TARGET diverg::diverg)
+if(NOT TARGET diverg::libdiverg_headers)
   include("${CMAKE_CURRENT_LIST_DIR}/diverg-targets.cmake")
+endif()
+
+# diverg::diverg alias resolves to the compiled ETI library when available,
+# otherwise falls back to the header-only target.
+if(NOT TARGET diverg::diverg)
+  add_library(diverg::diverg INTERFACE IMPORTED)
+  if(TARGET diverg::libdiverg)
+    target_link_libraries(diverg::diverg INTERFACE diverg::libdiverg)
+  else()
+    target_link_libraries(diverg::diverg INTERFACE diverg::libdiverg_headers)
+  endif()
 endif()
 
 check_required_components(diverg)

@@ -138,6 +138,166 @@
             "description": "Benchmark build for Cuda using Ninja generator",
             "inherits": "default-benchmark-all-cuda",
             "generator": "Ninja"
+        },
+        {
+            "name": "base-eti",
+            "displayName": "Base configuration for ETI library build",
+            "description": "Base configuration enabling the compiled ETI library",
+            "cacheVariables": {
+                "CMAKE_CXX_STANDARD": "17",
+                "USE_BUNDLED_ALL": true,
+                "DIVERG_ETI": true
+            }
+        },
+        {
+            "name": "default-debug-eti-omp",
+            "displayName": "Debug ETI configuration for OpenMP",
+            "description": "Debug build with ETI library for OpenMP using default generator",
+            "inherits": "base-eti",
+            "binaryDir": "${sourceDir}/build/DebugEti",
+            "cacheVariables": {
+                "CMAKE_BUILD_TYPE": "Debug",
+                "CMAKE_EXPORT_COMPILE_COMMANDS": true,
+                "DIVERG_ENABLE_OPENMP": true
+            }
+        },
+        {
+            "name": "ninja-debug-eti-omp",
+            "displayName": "Debug ETI configuration for OpenMP (Ninja)",
+            "description": "Debug build with ETI library for OpenMP using Ninja generator",
+            "inherits": "default-debug-eti-omp",
+            "generator": "Ninja"
+        },
+        {
+            "name": "default-release-eti-omp",
+            "displayName": "Release ETI configuration for OpenMP",
+            "description": "Release build with ETI library for OpenMP using default generator",
+            "inherits": "base-eti",
+            "binaryDir": "${sourceDir}/build/ReleaseEti",
+            "cacheVariables": {
+                "CMAKE_BUILD_TYPE": "Release",
+                "DIVERG_ENABLE_OPENMP": true
+            }
+        },
+        {
+            "name": "ninja-release-eti-omp",
+            "displayName": "Release ETI configuration for OpenMP (Ninja)",
+            "description": "Release build with ETI library for OpenMP using Ninja generator",
+            "inherits": "default-release-eti-omp",
+            "generator": "Ninja"
+        },
+        {
+            "name": "default-debug-eti-cuda",
+            "displayName": "Debug ETI configuration for Cuda",
+            "description": "Debug build with ETI library for CUDA+OpenMP using default generator",
+            "inherits": "base-eti",
+            "binaryDir": "${sourceDir}/build/DebugEtiCuda",
+            "cacheVariables": {
+                "CMAKE_BUILD_TYPE": "Debug",
+                "CMAKE_EXPORT_COMPILE_COMMANDS": true,
+                "DIVERG_ENABLE_CUDA": true,
+                "DIVERG_ENABLE_OPENMP": true
+            }
+        },
+        {
+            "name": "ninja-debug-eti-cuda",
+            "displayName": "Debug ETI configuration for Cuda (Ninja)",
+            "description": "Debug build with ETI library for CUDA+OpenMP using Ninja generator",
+            "inherits": "default-debug-eti-cuda",
+            "generator": "Ninja"
+        },
+        {
+            "name": "default-release-eti-cuda",
+            "displayName": "Release ETI configuration for Cuda",
+            "description": "Release build with ETI library for CUDA+OpenMP using default generator",
+            "inherits": "base-eti",
+            "binaryDir": "${sourceDir}/build/ReleaseEtiCuda",
+            "cacheVariables": {
+                "CMAKE_BUILD_TYPE": "Release",
+                "DIVERG_ENABLE_CUDA": true,
+                "DIVERG_ENABLE_OPENMP": true
+            }
+        },
+        {
+            "name": "ninja-release-eti-cuda",
+            "displayName": "Release ETI configuration for Cuda (Ninja)",
+            "description": "Release build with ETI library for CUDA+OpenMP using Ninja generator",
+            "inherits": "default-release-eti-cuda",
+            "generator": "Ninja"
+        },
+        {
+            "name": "default-debug-eti-all-omp",
+            "displayName": "Debug ETI configuration for OpenMP (all targets)",
+            "description": "Debug build with ETI library for OpenMP including tests and benchmarks",
+            "inherits": "default-debug-eti-omp",
+            "binaryDir": "${sourceDir}/build/DebugEtiAll",
+            "cacheVariables": {
+                "BUILD_TESTING": true,
+                "BUILD_BENCHMARKING": true,
+                "DIVERG_STATS": true
+            }
+        },
+        {
+            "name": "ninja-debug-eti-all-omp",
+            "displayName": "Debug ETI configuration for OpenMP (all targets, Ninja)",
+            "description": "Debug build with ETI library for OpenMP including tests and benchmarks using Ninja generator",
+            "inherits": "default-debug-eti-all-omp",
+            "generator": "Ninja"
+        },
+        {
+            "name": "default-release-eti-all-omp",
+            "displayName": "Release ETI configuration for OpenMP (all targets)",
+            "description": "Release build with ETI library for OpenMP including tests",
+            "inherits": "default-release-eti-omp",
+            "binaryDir": "${sourceDir}/build/ReleaseEtiAll",
+            "cacheVariables": {
+                "BUILD_TESTING": true,
+                "BUILD_BENCHMARKING": true
+            }
+        },
+        {
+            "name": "ninja-release-eti-all-omp",
+            "displayName": "Release ETI configuration for OpenMP (all targets, Ninja)",
+            "description": "Release build with ETI library for OpenMP including tests using Ninja generator",
+            "inherits": "default-release-eti-all-omp",
+            "generator": "Ninja"
+        },
+        {
+            "name": "default-debug-eti-all-cuda",
+            "displayName": "Debug ETI configuration for Cuda (all targets)",
+            "description": "Debug build with ETI library for CUDA+OpenMP including tests and benchmarks",
+            "inherits": "default-debug-eti-cuda",
+            "binaryDir": "${sourceDir}/build/DebugEtiAllCuda",
+            "cacheVariables": {
+                "BUILD_TESTING": true,
+                "BUILD_BENCHMARKING": true,
+                "DIVERG_STATS": true
+            }
+        },
+        {
+            "name": "ninja-debug-eti-all-cuda",
+            "displayName": "Debug ETI configuration for Cuda (all targets, Ninja)",
+            "description": "Debug build with ETI library for CUDA+OpenMP including tests and benchmarks using Ninja generator",
+            "inherits": "default-debug-eti-all-cuda",
+            "generator": "Ninja"
+        },
+        {
+            "name": "default-release-eti-all-cuda",
+            "displayName": "Release ETI configuration for Cuda (all targets)",
+            "description": "Release build with ETI library for CUDA+OpenMP including tests",
+            "inherits": "default-release-eti-cuda",
+            "binaryDir": "${sourceDir}/build/ReleaseEtiAllCuda",
+            "cacheVariables": {
+                "BUILD_TESTING": true,
+                "BUILD_BENCHMARKING": true
+            }
+        },
+        {
+            "name": "ninja-release-eti-all-cuda",
+            "displayName": "Release ETI configuration for Cuda (all targets, Ninja)",
+            "description": "Release build with ETI library for CUDA+OpenMP including tests using Ninja generator",
+            "inherits": "default-release-eti-all-cuda",
+            "generator": "Ninja"
         }
     ]
 }

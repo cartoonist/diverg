@@ -13,8 +13,8 @@
  *  See LICENSE file for more information.
  */
 
-#ifndef DIVERG_RANGE_SPARSE_HPP_
-#define DIVERG_RANGE_SPARSE_HPP_
+#ifndef DIVERG_RANGE_SPARSE_HPP__
+#define DIVERG_RANGE_SPARSE_HPP__
 
 #include <iostream>
 #include <iomanip>
@@ -846,11 +846,17 @@ namespace diverg {
 #endif
   }
 
-  template< typename TRCRSMatrix,
-            typename TExecSpace = Kokkos::DefaultExecutionSpace >
-  inline TRCRSMatrix
-  range_spadd( TRCRSMatrix const& a, TRCRSMatrix const& b,
-               TExecSpace space = {} )
+  /* === ETI wrapper class for range_spadd === */
+  template< typename TRCRSMatrix, typename TExecSpace >
+  struct RangeSpAdd {
+    static TRCRSMatrix spadd( TRCRSMatrix const& a, TRCRSMatrix const& b,
+                              TExecSpace space );
+  };
+
+  template< typename TRCRSMatrix, typename TExecSpace >
+  TRCRSMatrix
+  RangeSpAdd< TRCRSMatrix, TExecSpace >::spadd(
+      TRCRSMatrix const& a, TRCRSMatrix const& b, TExecSpace space )
   {
     typedef TRCRSMatrix range_crsmatrix_t;
 
@@ -877,6 +883,15 @@ namespace diverg {
     // moved when the views are on the same memory space (the RCRS ctor does call
     // `deep_copy`).
     return TRCRSMatrix( a.numCols(), c_entries, c_rowmap, nnz );
+  }
+
+  template< typename TRCRSMatrix,
+            typename TExecSpace = Kokkos::DefaultExecutionSpace >
+  inline TRCRSMatrix
+  range_spadd( TRCRSMatrix const& a, TRCRSMatrix const& b,
+               TExecSpace space = {} )
+  {
+    return RangeSpAdd< TRCRSMatrix, TExecSpace >::spadd( a, b, space );
   }
 
   /**
@@ -2683,11 +2698,17 @@ namespace diverg {
     return nnz;
   }
 
-  template< typename TRCRSMatrix,
-            typename TSparseConfig=DefaultSparseConfiguration >
-  inline TRCRSMatrix
-  range_spgemm( TRCRSMatrix const& a, TRCRSMatrix const& b,
-                TSparseConfig config={} )
+  // === ETI wrapper class for range_spgemm ===
+  template< typename TRCRSMatrix, typename TSparseConfig >
+  struct RangeSpGEMM {
+    static TRCRSMatrix spgemm( TRCRSMatrix const& a, TRCRSMatrix const& b,
+                                TSparseConfig config );
+  };
+
+  template< typename TRCRSMatrix, typename TSparseConfig >
+  TRCRSMatrix
+  RangeSpGEMM< TRCRSMatrix, TSparseConfig >::spgemm(
+      TRCRSMatrix const& a, TRCRSMatrix const& b, TSparseConfig config )
   {
     typedef TRCRSMatrix range_crsmatrix_t;
     typedef typename range_crsmatrix_t::ordinal_type ordinal_type;
@@ -2719,9 +2740,25 @@ namespace diverg {
   }
 
   template< typename TRCRSMatrix,
-            typename TSparseConfig = DefaultSparseConfiguration >
+            typename TSparseConfig=DefaultSparseConfiguration >
   inline TRCRSMatrix
-  range_power( TRCRSMatrix const& a, unsigned int k, TSparseConfig config = {} )
+  range_spgemm( TRCRSMatrix const& a, TRCRSMatrix const& b,
+                TSparseConfig config={} )
+  {
+    return RangeSpGEMM< TRCRSMatrix, TSparseConfig >::spgemm( a, b, config );
+  }
+
+  // === ETI wrapper class for range_power ===
+  template< typename TRCRSMatrix, typename TSparseConfig >
+  struct RangePower {
+    static TRCRSMatrix power( TRCRSMatrix const& a, unsigned int k,
+                               TSparseConfig config );
+  };
+
+  template< typename TRCRSMatrix, typename TSparseConfig >
+  TRCRSMatrix
+  RangePower< TRCRSMatrix, TSparseConfig >::power(
+      TRCRSMatrix const& a, unsigned int k, TSparseConfig config )
   {
     typedef TRCRSMatrix rcrsmatrix_t;
 
@@ -2736,6 +2773,14 @@ namespace diverg {
                                     c_entries, k, config );
 
     return TRCRSMatrix( a.numCols(), c_entries, c_rowmap, nnz );
+  }
+
+  template< typename TRCRSMatrix,
+            typename TSparseConfig = DefaultSparseConfiguration >
+  inline TRCRSMatrix
+  range_power( TRCRSMatrix const& a, unsigned int k, TSparseConfig config = {} )
+  {
+    return RangePower< TRCRSMatrix, TSparseConfig >::power( a, k, config );
   }
 
   template< typename THandle,
@@ -2802,4 +2847,8 @@ namespace diverg {
   }
 }  // namespace diverg
 
-#endif  // DIVERG_RANGE_SPARSE_HPP_
+#ifndef DIVERG_RANGE_SPARSE_ETI_INST__
+#  include <diverg/eti/range_sparse.hpp>
+#endif
+
+#endif  // DIVERG_RANGE_SPARSE_HPP__

@@ -3412,4 +3412,8 @@ namespace diverg {
   }
 }  /* --- end of namespace diverg --- */
 
+#ifndef DIVERG_CRSMATRIX_ETI_INST__
+#  include <diverg/eti/crs_matrix.hpp>
+#endif
+
 #endif  /* --- #ifndef DIVERG_CRS_MATRIX_HPP__ --- */

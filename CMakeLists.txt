@@ -4,8 +4,7 @@ cmake_minimum_required(VERSION 3.16)
 # Options
 option(BUILD_TESTING "Build test programs" OFF)
 option(BUILD_BENCHMARKING "Build benchmark program" OFF)
-# TODO: handle BUILD_HEADERS_ONLY option
-option(BUILD_HEADERS_ONLY "Configure as header-only library" OFF)
+option(DIVERG_ETI "Build compiled library with ETI" OFF)
 option(DIVERG_ENABLE_OPENMP "Enable OpenMP as host execution space" ON)
 option(DIVERG_ENABLE_CUDA "Enable CUDA as device execution space" OFF)
 option(DIVERG_STRICT_ON_WARNS "Pass '-Werror' flag to compiler" ON)
@@ -79,19 +78,72 @@ configure_file(include/diverg/config.hpp.in ${PROJECT_SOURCE_DIR}/include/diverg
 
 # Setting header files
 file(GLOB HEADER_FILES RELATIVE "${PROJECT_SOURCE_DIR}/include" "${PROJECT_SOURCE_DIR}/include/diverg/*.hpp")
+# Keep ETI headers separate: they install into diverg/eti/
+file(GLOB ETI_HEADER_FILES RELATIVE "${PROJECT_SOURCE_DIR}/include" "${PROJECT_SOURCE_DIR}/include/diverg/eti/*.hpp")
 list(TRANSFORM HEADER_FILES PREPEND "${PROJECT_SOURCE_DIR}/include/" OUTPUT_VARIABLE BUILD_HEADER_FILES)
+list(TRANSFORM ETI_HEADER_FILES PREPEND "${PROJECT_SOURCE_DIR}/include/" OUTPUT_VARIABLE BUILD_ETI_HEADER_FILES)
 list(TRANSFORM HEADER_FILES PREPEND "${CMAKE_INSTALL_FULL_INCLUDEDIR}/" OUTPUT_VARIABLE INSTALL_HEADER_FILES)
-# Defining target sources
+list(TRANSFORM ETI_HEADER_FILES PREPEND "${CMAKE_INSTALL_FULL_INCLUDEDIR}/" OUTPUT_VARIABLE INSTALL_ETI_HEADER_FILES)
+# Defining target sources (ETI headers included for IDE visibility)
 target_sources(libdiverg_headers
-  INTERFACE "$<BUILD_INTERFACE:${BUILD_HEADER_FILES}>;$<INSTALL_INTERFACE:${INSTALL_HEADER_FILES}>")
+  INTERFACE "$<BUILD_INTERFACE:${BUILD_HEADER_FILES};${BUILD_ETI_HEADER_FILES}>;$<INSTALL_INTERFACE:${INSTALL_HEADER_FILES};${INSTALL_ETI_HEADER_FILES}>")
 
 # Defining `diverg::libdiverg_headers` alias
 add_library(diverg::libdiverg_headers ALIAS libdiverg_headers)
 
-# Install targets for libdiverg_headers
+# Creating the compiled library for ETI mode
+if(DIVERG_ETI)
+  set(DIVERG_ETI_SOURCES
+    src/eti/hbitvector.cpp
+    src/eti/crs_matrix.cpp
+    src/eti/range_sparse.cpp)
+  if(DIVERG_ENABLE_CUDA)
+    list(APPEND DIVERG_ETI_SOURCES
+      src/eti/hbitvector_cuda.cpp
+      src/eti/range_sparse_cuda.cpp)
+    # ETI sources include Kokkos headers with KOKKOS_FUNCTION decorators
+    # which expand to `__device__ __host__` which requires a CUDA compiler.
+    # Enable the CUDA language in CMake if not already active (find_package(Kokkos)
+    # may not do this automatically for downstream projects).
+    enable_language(CUDA)
+    set_source_files_properties(
+      src/eti/hbitvector.cpp
+      src/eti/hbitvector_cuda.cpp
+      src/eti/range_sparse.cpp
+      src/eti/range_sparse_cuda.cpp
+      PROPERTIES LANGUAGE CUDA)
+  endif()
+  add_library(libdiverg ${DIVERG_ETI_SOURCES})
+  # Set the output name for the library target
+  set_target_properties(libdiverg PROPERTIES OUTPUT_NAME "diverg")
+  if(DIVERG_ENABLE_CUDA)
+    # Device symbols from explicit instantiations must be linkable across TUs.
+    set_target_properties(libdiverg PROPERTIES CUDA_SEPARABLE_COMPILATION ON)
+  endif()
+  # Inherit all include paths and link deps from the INTERFACE header-only target
+  target_link_libraries(libdiverg PUBLIC libdiverg_headers)
+  # Advertise ETI mode to users so they see the extern template declarations
+  target_compile_definitions(libdiverg PUBLIC DIVERG_ETI_ENABLED)
+  add_library(diverg::libdiverg ALIAS libdiverg)
+  add_library(diverg::diverg ALIAS libdiverg)
+else()
+  add_library(diverg::diverg ALIAS libdiverg_headers)
+endif()
+
+# Install headers
 install(FILES ${BUILD_HEADER_FILES} DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}/diverg)
-# Exporting targets
-install(TARGETS libdiverg_headers EXPORT diverg-targets)
+install(DIRECTORY ${PROJECT_SOURCE_DIR}/include/diverg/eti
+  DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}/diverg)
+# Export targets
+if(DIVERG_ETI)
+  install(TARGETS libdiverg_headers libdiverg EXPORT diverg-targets
+    ARCHIVE DESTINATION ${CMAKE_INSTALL_LIBDIR}
+    LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR}
+    RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR}
+  )
+else()
+  install(TARGETS libdiverg_headers EXPORT diverg-targets)
+endif()
 install(EXPORT diverg-targets NAMESPACE diverg:: DESTINATION ${CMAKE_INSTALL_LIBDIR}/cmake/diverg)
 # Creating the package configuration file
 configure_package_config_file(${CMAKE_CURRENT_SOURCE_DIR}/cmake/diverg-config.cmake.in
