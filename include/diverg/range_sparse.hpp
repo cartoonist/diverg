@@ -418,8 +418,8 @@ namespace diverg {
               auto ptr = &r_row_map( idx + 1 );
               auto value = Kokkos::atomic_load( ptr );
               while ( value < static_cast< size_type >( n ) ) {
-                exchanged = Kokkos::atomic_compare_exchange_strong(
-                    ptr, value, value + 1 );
+                exchanged = ( Kokkos::atomic_compare_exchange(
+                    ptr, value, value + 1 ) == value );
                 if ( exchanged ) break;
                 value = Kokkos::atomic_load( ptr );
               }
