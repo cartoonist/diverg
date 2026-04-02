@@ -792,13 +792,15 @@ namespace diverg {
                TRowMapDeviceViewA a_rowmap, TEntriesDeviceViewA a_entries,
                TRowMapDeviceViewB b_rowmap, TEntriesDeviceViewB b_entries,
                TRowMapDeviceViewC& c_rowmap, TEntriesDeviceViewC& c_entries,
-               TTimer* timer_ptr = nullptr )
+               [[maybe_unused]] TTimer* timer_ptr = nullptr )
   {
     typedef TEntriesDeviceViewC c_entries_type;
     typedef TRowMapDeviceViewC  c_row_map_type;
     typedef typename c_entries_type::value_type ordinal_type;
     typedef typename c_row_map_type::value_type size_type;
+#ifdef DIVERG_STATS
     typedef typename c_row_map_type::execution_space execution_space;
+#endif
 
     assert( handle.a_ncols == handle.b_ncols );
     assert( a_rowmap.extent( 0 ) == b_rowmap.extent( 0 ) );
@@ -1113,7 +1115,7 @@ namespace diverg {
                         TRowMapDeviceViewB b_rowmap,
                         TEntriesDeviceViewB b_entries,
                         TExecGrid grid,
-                        ThreadSequentialPartition part,
+                        ThreadSequentialPartition /*part*/,
                         HBitVectorAccumulator< TL1Size > )
   {
     typedef TEntriesDeviceViewA a_entries_type;
@@ -2642,7 +2644,7 @@ namespace diverg {
                 TRowMapDeviceViewB b_rowmap, TEntriesDeviceViewB b_entries,
                 TRowMapDeviceViewC& c_rowmap, TEntriesDeviceViewC& c_entries,
                 TSparseConfig config={},
-                TTimer* timer_ptr = nullptr )
+                [[maybe_unused]] TTimer* timer_ptr = nullptr )
   {
     typedef TEntriesDeviceViewC c_entries_type;
     typedef TRowMapDeviceViewC  c_row_map_type;
@@ -2793,7 +2795,7 @@ namespace diverg {
                        TRowMapDeviceViewA& a_rowmap, TEntriesDeviceViewA& a_entries,
                        TRowMapDeviceViewC& c_rowmap, TEntriesDeviceViewC& c_entries,
                        unsigned int k, TSparseConfig config={},
-                       TTimer* timer_ptr = nullptr )
+                       [[maybe_unused]] TTimer* timer_ptr = nullptr )
   {
     typedef THandle handle_t;
     typedef TEntriesDeviceViewC c_entries_type;

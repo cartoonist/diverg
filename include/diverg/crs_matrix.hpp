@@ -1975,7 +1975,7 @@ namespace diverg {
      */
     template< typename TCallback >
     inline size_type
-    build( ordinal_type nrows, ordinal_type ncols, TCallback callback, size_type nnz_est=0 )
+    build( ordinal_type nrows, ordinal_type /*ncols*/, TCallback callback, size_type nnz_est=0 )
     {
       if ( nnz_est ) this->reserve( nnz_est );
       diverg::resize( this->rowmap, nrows + 1 );

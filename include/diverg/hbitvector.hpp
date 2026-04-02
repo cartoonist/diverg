@@ -169,7 +169,7 @@ namespace diverg {
        *  NOTE: For banded hbitvector, `n` should be band size.
        */
       KOKKOS_FUNCTION
-      HBitVector( const member_type& tm, size_type n )
+      HBitVector( const member_type& /*tm*/, size_type n )
           : /*m_size( n ),*/ l1_begin_bidx( 0 ), l1_begin( 0 ),
             l1_data(), l2_data()
       {

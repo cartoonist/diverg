@@ -713,7 +713,7 @@ namespace diverg {
   #endif
 
   #if defined(KOKKOS_ENABLE_OPENMP)
-  inline int get_suggested_team_size( const int vector_size, Kokkos::OpenMP )
+  inline int get_suggested_team_size( const int /*vector_size*/, Kokkos::OpenMP )
   {
     return 1;
   }
@@ -771,7 +771,7 @@ namespace diverg {
   #endif
 
   #if defined(KOKKOS_ENABLE_OPENMP)
-  inline int get_team_work_size( const int team_size, Kokkos::OpenMP )
+  inline int get_team_work_size( const int /*team_size*/, Kokkos::OpenMP )
   {
     return 16;
   }

@@ -339,7 +339,7 @@ is_same( TXCRSMatrix& x_mat, TRCRSMatrix& r_mat )
 template< typename TXCRSMatrix >
 inline TXCRSMatrix
 kokkos_kernels_spgemm( TXCRSMatrix const& a, TXCRSMatrix const& b,
-                       Kokkos::Timer* timer_ptr = nullptr )
+                       [[maybe_unused]] Kokkos::Timer* timer_ptr = nullptr )
 {
   typedef typename TXCRSMatrix::ordinal_type ordinal_t;
   typedef typename TXCRSMatrix::size_type size_type;
@@ -411,7 +411,7 @@ kokkos_kernels_spgemm( TXCRSMatrix const& a, TXCRSMatrix const& b,
 template< typename TXCRSMatrix >
 inline TXCRSMatrix
 kokkos_kernels_spadd( TXCRSMatrix const& a, TXCRSMatrix const& b,
-                      Kokkos::Timer* timer_ptr = nullptr )
+                      [[maybe_unused]] Kokkos::Timer* timer_ptr = nullptr )
 {
   typedef typename TXCRSMatrix::ordinal_type ordinal_t;
   typedef typename TXCRSMatrix::size_type size_type;
@@ -476,9 +476,11 @@ kokkos_kernels_spadd( TXCRSMatrix const& a, TXCRSMatrix const& b,
 template< typename TXCRSMatrix >
 inline TXCRSMatrix
 kokkos_kernels_power( TXCRSMatrix const& a, unsigned int n,
-                      Kokkos::Timer* timer_ptr = nullptr )
+                      [[maybe_unused]] Kokkos::Timer* timer_ptr = nullptr )
 {
+#ifdef DIVERG_STATS
   using execution_space = typename TXCRSMatrix::execution_space;
+#endif
 
   assert( a.numRows() == a.numCols() );
 
