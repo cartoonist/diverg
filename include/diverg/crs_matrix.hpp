@@ -153,6 +153,8 @@ namespace diverg {
     /**
      *  NOTE: This function assumes that `rowmap` is an already allocated array of
      *        length `numRows`+1 with `rowmap[0] == 0`.
+     *  NOTE: All external values are assumed to be non-negative (not validated
+     *        at runtime).
      */
     template< typename TEntries,
               typename TRowmap,
@@ -169,28 +171,32 @@ namespace diverg {
             typename TEntries::value_type scol=0,
             typename TEntries::value_type srow=0 )
     {
-      typedef typename TRowmap::value_type size_type;
+      //typedef typename TRowmap::value_type size_type;
+      typedef typename TEntries::value_type ordinal_type;
+      typedef typename std::iterator_traits< TFromRowmapIter >::value_type ext_size_type;
 
-      size_type idx = 0;
-      size_type last_value_pp = 0;  // last value + 1: since there is zero values.
+      ext_size_type idx = 0;
+      bool has_pending = false;
+      ordinal_type pending_end = 0;  // end column of the current open range
       rowmap[ 0 ] = 0;
       auto rowmap_itr = rowmap.begin() + srow + 1;
       ++e_rowmap_begin;  // skip the first element which always is zero
       while ( e_rowmap_begin != e_rowmap_end ) {
         while ( idx < *e_rowmap_begin ) {
-          if ( last_value_pp &&
-               static_cast< size_type >( *e_entries_begin ) == last_value_pp ) last_value_pp++;
+          const ordinal_type col = static_cast< ordinal_type >( *e_entries_begin );
+          if ( has_pending && col == pending_end + 1 ) pending_end++;
           else {
-            if ( last_value_pp ) entries.push_back( last_value_pp - 1 + scol );
-            entries.push_back( *e_entries_begin + scol );
-            last_value_pp = *e_entries_begin + 1;
+            if ( has_pending ) entries.push_back( pending_end + scol );
+            entries.push_back( col + scol );
+            pending_end = col;
+            has_pending = true;
           }
           ++idx;
           ++e_entries_begin;
         }
-        if ( last_value_pp ) {
-          entries.push_back( last_value_pp - 1 + scol );
-          last_value_pp = 0;
+        if ( has_pending ) {
+          entries.push_back( pending_end + scol );
+          has_pending = false;
         }
         *rowmap_itr++ = entries.size();
         ++e_rowmap_begin;
@@ -200,6 +206,8 @@ namespace diverg {
     /**
      *  NOTE: This function assumes that `rowmap` is an already allocated array of
      *        length `numRows`+1 with `rowmap[0] == 0`.
+     *  NOTE: All external values are assumed to be non-negative (not validated
+     *        at runtime).
      */
     template< typename TEntries,
               typename TRowmap,
@@ -216,17 +224,19 @@ namespace diverg {
             typename TEntries::value_type scol=0,
             typename TEntries::value_type srow=0 )
     {
-      typedef typename TRowmap::value_type size_type;
+      //typedef typename TRowmap::value_type size_type;
+      typedef typename TEntries::value_type ordinal_type;
+      typedef typename std::iterator_traits< TFromRowmapIter >::value_type ext_size_type;
 
-      size_type idx = 0;
+      ext_size_type idx = 0;
       rowmap[ 0 ] = 0;
       auto rowmap_itr = rowmap.begin() + srow + 1;
       ++e_rowmap_begin;  // skip the first element which always is zero
       while ( e_rowmap_begin != e_rowmap_end ) {
         while ( idx < *e_rowmap_begin ) {
-          assert( idx+1 < *e_rowmap_begin );
+          assert( idx + 1 < *e_rowmap_begin );
           for ( auto elem = *e_entries_begin; elem <= *( e_entries_begin + 1 ); ++elem ) {
-            entries.push_back( elem + scol );
+            entries.push_back( static_cast< ordinal_type >( elem ) + scol );
           }
           idx += 2;
           e_entries_begin += 2;
