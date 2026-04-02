@@ -273,7 +273,12 @@ _is_same( TXEntriesDeviceView x_entries,
           TBRowMapDeviceView b_rowmap )
 {
   typedef typename TXEntriesDeviceView::execution_space execution_space;
-  typedef typename TXRowMapDeviceView::non_const_value_type size_type;
+  typedef typename TXRowMapDeviceView::value_type x_size_type;
+  typedef typename TBRowMapDeviceView::value_type b_size_type;
+  typedef typename std::remove_const< std::common_type_t< x_size_type, b_size_type > >::type size_type;
+  typedef typename TXEntriesDeviceView::value_type x_ordinal_type;
+  typedef typename TBEntriesDeviceView::value_type b_ordinal_type;
+  typedef typename std::remove_const< std::common_type_t< x_ordinal_type, b_ordinal_type > >::type ordinal_type;
 
   {
     size_type num_matches = 0;
@@ -281,11 +286,13 @@ _is_same( TXEntriesDeviceView x_entries,
         "diverg::test_range_sparse::compare_rowmap",
         Kokkos::RangePolicy< execution_space >( 0, x_rowmap.extent( 0 ) ),
         KOKKOS_LAMBDA ( const uint64_t i, size_type& l_nm ) {
-          if ( x_rowmap( i ) == b_rowmap( i ) ) ++l_nm;
+          size_type x_rowmap_i = static_cast< size_type >( x_rowmap( i ) );
+          size_type b_rowmap_i = static_cast< size_type >( b_rowmap( i ) );
+          if ( x_rowmap_i == b_rowmap_i ) ++l_nm;
         },
         num_matches );
 
-    if ( num_matches != x_rowmap.extent( 0 ) ) return false;
+    if ( num_matches != static_cast< size_type >( x_rowmap.extent( 0 ) ) ) return false;
   }
 
   {
@@ -294,11 +301,13 @@ _is_same( TXEntriesDeviceView x_entries,
         "diverg::test_range_sparse::compare_entries",
         Kokkos::RangePolicy< execution_space >( 0, x_entries.extent( 0 ) ),
         KOKKOS_LAMBDA ( const uint64_t i, size_type& l_nm ) {
-          if ( x_entries( i ) == b_entries( i ) ) ++l_nm;
+          ordinal_type b_entries_i = static_cast< ordinal_type >( b_entries( i ) );
+          ordinal_type x_entries_i = static_cast< ordinal_type >( x_entries( i ) );
+          if ( x_entries_i == b_entries_i ) ++l_nm;
         },
         num_matches );
 
-    if ( num_matches != x_entries.extent( 0 ) ) return false;
+    if ( num_matches != static_cast< size_type >( x_entries.extent( 0 ) ) ) return false;
   }
 
   return true;
@@ -310,12 +319,15 @@ is_same( TXCRSMatrix& x_mat, TRCRSMatrix& r_mat )
 {
   typedef typename TXCRSMatrix::execution_space xcrs_execution_space;
   typedef make_basic_t< TRCRSMatrix > TBCRSMatrix;
+  typedef typename TBCRSMatrix::size_type b_size_type;
+  typedef typename TXCRSMatrix::size_type x_size_type;
+  typedef typename std::remove_const< std::common_type_t< x_size_type, b_size_type > >::type size_type;
 
   TBCRSMatrix b_mat;
   b_mat.assign( r_mat );
 
   if ( x_mat.numRows() != b_mat.numRows() || x_mat.numCols() != b_mat.numCols()
-       || x_mat.nnz() != b_mat.nnz() )
+       || static_cast< size_type >( x_mat.nnz() ) != static_cast< size_type >( b_mat.nnz() ) )
     return false;
 
   auto b_mat_entries = b_mat.entries_device_view( xcrs_execution_space{} );
@@ -509,6 +521,8 @@ TEMPLATE_SCENARIO_SIG( "Validation and verification of range SpGEMM", "[range_sp
   typedef typename execution_space::device_type device_t;
   typedef CRSMatrix< TSpec, bool, TOrdinal, TSize > rcrsmatrix_t;
   typedef KokkosSparse::CrsMatrix< TScalar, TOrdinal, device_t > xcrsmatrix_t;
+  typedef typename xcrsmatrix_t::size_type x_size_type;
+  typedef typename std::remove_const< std::common_type_t< TSize, x_size_type > >::type size_type;
   typedef typename xcrsmatrix_t::HostMirror xcrs_host_mirror;
   typedef gum::SeqGraph< gum::Succinct > graph_type;
 
@@ -518,7 +532,7 @@ TEMPLATE_SCENARIO_SIG( "Validation and verification of range SpGEMM", "[range_sp
     rcrsmatrix_t rrand_mat;
     xcrsmatrix_t xrand_mat = create_random_binary_matrix< xcrsmatrix_t >( N, NNZ, rrand_mat );
 
-    REQUIRE( rrand_mat.nnz() == xrand_mat.nnz() );
+    REQUIRE( static_cast< size_type >( rrand_mat.nnz() ) == static_cast< size_type >( xrand_mat.nnz() ) );
     REQUIRE( rrand_mat.nnz() == NNZ );
     REQUIRE( is_same( xrand_mat, rrand_mat ) );
 
@@ -547,7 +561,7 @@ TEMPLATE_SCENARIO_SIG( "Validation and verification of range SpGEMM", "[range_sp
     auto a = copy_xcrs< xcrsmatrix_t >( h_a );
     rcrsmatrix_t ra( h_a );
 
-    REQUIRE( ra.nnz() == a.nnz() );
+    REQUIRE( static_cast< size_type >( ra.nnz() ) == static_cast< size_type >( a.nnz() ) );
     REQUIRE( is_same( h_a, ra ) );
 
     WHEN( "It is multiplied to itself" )
@@ -581,6 +595,8 @@ TEMPLATE_SCENARIO_SIG( "Validation and verification of range power", "[range_spa
   typedef typename execution_space::device_type device_t;
   typedef CRSMatrix< TSpec, bool, TOrdinal, TSize > rcrsmatrix_t;
   typedef KokkosSparse::CrsMatrix< TScalar, TOrdinal, device_t > xcrsmatrix_t;
+  typedef typename xcrsmatrix_t::size_type x_size_type;
+  typedef typename std::remove_const< std::common_type_t< TSize, x_size_type > >::type size_type;
   typedef typename xcrsmatrix_t::HostMirror xcrs_host_mirror;
   typedef gum::SeqGraph< gum::Succinct > graph_type;
 
@@ -590,7 +606,7 @@ TEMPLATE_SCENARIO_SIG( "Validation and verification of range power", "[range_spa
     rcrsmatrix_t rrand_mat;
     xcrsmatrix_t xrand_mat = create_random_binary_matrix< xcrsmatrix_t >( N, NNZ, rrand_mat );
 
-    REQUIRE( rrand_mat.nnz() == xrand_mat.nnz() );
+    REQUIRE( static_cast< size_type >( rrand_mat.nnz() ) == static_cast< size_type >( xrand_mat.nnz() ) );
     REQUIRE( rrand_mat.nnz() == NNZ );
     REQUIRE( is_same( xrand_mat, rrand_mat ) );
 
@@ -619,7 +635,7 @@ TEMPLATE_SCENARIO_SIG( "Validation and verification of range power", "[range_spa
     auto a = copy_xcrs< xcrsmatrix_t >( h_a );
     rcrsmatrix_t ra( h_a );
 
-    REQUIRE( ra.nnz() == a.nnz() );
+    REQUIRE( static_cast< size_type >( ra.nnz() ) == static_cast< size_type >( a.nnz() ) );
     REQUIRE( is_same( h_a, ra ) );
 
     WHEN( "It is raised to the power of " + std::to_string( K ) )
@@ -649,6 +665,8 @@ TEMPLATE_SCENARIO_SIG( "Validation and verification of range SpAdd", "[range_spa
   typedef typename execution_space::device_type device_t;
   typedef CRSMatrix< TSpec, bool, TOrdinal, TSize > rcrsmatrix_t;
   typedef KokkosSparse::CrsMatrix< TScalar, TOrdinal, device_t > xcrsmatrix_t;
+  typedef typename xcrsmatrix_t::size_type x_size_type;
+  typedef typename std::remove_const< std::common_type_t< TSize, x_size_type > >::type size_type;
   typedef typename xcrsmatrix_t::HostMirror xcrs_host_mirror;
   typedef gum::SeqGraph< gum::Succinct > graph_type;
 
@@ -660,8 +678,8 @@ TEMPLATE_SCENARIO_SIG( "Validation and verification of range SpAdd", "[range_spa
     xcrsmatrix_t xrand_mat1 = create_random_binary_matrix< xcrsmatrix_t >( N, NNZ, rrand_mat1 );
     xcrsmatrix_t xrand_mat2 = create_random_binary_matrix< xcrsmatrix_t >( N, NNZ, rrand_mat2 );
 
-    REQUIRE( rrand_mat1.nnz() == xrand_mat1.nnz() );
-    REQUIRE( rrand_mat2.nnz() == xrand_mat2.nnz() );
+    REQUIRE( static_cast< size_type >( rrand_mat1.nnz() ) == static_cast< size_type >( xrand_mat1.nnz() ) );
+    REQUIRE( static_cast< size_type >( rrand_mat2.nnz() ) == static_cast< size_type >( xrand_mat2.nnz() ) );
     REQUIRE( rrand_mat1.nnz() == NNZ );
     REQUIRE( is_same( xrand_mat1, rrand_mat1 ) );
     REQUIRE( is_same( xrand_mat2, rrand_mat2 ) );
@@ -691,7 +709,7 @@ TEMPLATE_SCENARIO_SIG( "Validation and verification of range SpAdd", "[range_spa
     auto a = copy_xcrs< xcrsmatrix_t >( h_a );
     rcrsmatrix_t ra( h_a );
 
-    REQUIRE( ra.nnz() == a.nnz() );
+    REQUIRE( static_cast< size_type >( ra.nnz() ) == static_cast< size_type >( a.nnz() ) );
     REQUIRE( is_same( h_a, ra ) );
 
     WHEN( "It is added by identity matrix" )

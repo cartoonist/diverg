@@ -1208,7 +1208,7 @@ namespace diverg {
         },
         Kokkos::Max< ordinal_type >( bandwidth ) );
 
-    assert( bandwidth >= hbv_type::L1_SIZE );
+    assert( bandwidth >= static_cast< ordinal_type >( hbv_type::L1_SIZE ) );
     return bandwidth;
   }
 

@@ -186,7 +186,7 @@ namespace test_util {
             typename TExternalMatrix = KokkosSparse::CrsMatrix<
                 signed char, int, Kokkos::DefaultHostExecutionSpace > >
   inline TExternalMatrix
-  to_external_crs( const TDenseView matrix, std::size_t nnz=0 )
+  to_external_crs( const TDenseView matrix, typename TExternalMatrix::size_type nnz=0 )
   {
     typedef Kokkos::DefaultHostExecutionSpace host_space;
     typedef Kokkos::TeamPolicy< host_space > policy_type;
@@ -194,13 +194,14 @@ namespace test_util {
 
     typedef TExternalMatrix xcrsmat_type;
     typedef typename xcrsmat_type::staticcrsgraph_type staticcrsgraph_type;
-    typedef typename staticcrsgraph_type::size_type size_type;
+    typedef typename xcrsmat_type::size_type size_type;
+    typedef typename xcrsmat_type::ordinal_type ordinal_type;
     typedef typename staticcrsgraph_type::entries_type::non_const_type entries_type;
     typedef typename staticcrsgraph_type::row_map_type::non_const_type row_map_type;
     typedef typename xcrsmat_type::values_type::non_const_type values_type;
 
-    auto nrows = numRows( matrix );
-    auto ncols = numCols( matrix );
+    ordinal_type nrows = numRows( matrix );
+    ordinal_type ncols = numCols( matrix );
     if ( nnz == 0 ) nnz = get_nnz( matrix );
 
     entries_type entries( "entries", nnz );
@@ -248,7 +249,7 @@ namespace test_util {
         Kokkos::RangePolicy< host_space >( 0, nrows ),
         [=]( const uint64_t i ) {
           auto eidx = rowmap( i );
-          for ( size_type j = 0; j < ncols; ++j ) {
+          for ( ordinal_type j = 0; j < ncols; ++j ) {
             if ( matrix( i, j ) == 1 ) entries( eidx++ ) = j;
           }
           assert( eidx == rowmap( i + 1 ) );

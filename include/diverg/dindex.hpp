@@ -222,7 +222,7 @@ namespace diverg {
           },
           lower );
       assert( i == nnz );
-      assert( irow == static_cast< unsigned int >( nrows + 1 ) );
+      assert( irow == static_cast< size_type >( nrows + 1 ) );
 
       return TCrsMatrix( "adjacency matrix", nrows, nrows, nnz, values, rowmap, entries );
     }

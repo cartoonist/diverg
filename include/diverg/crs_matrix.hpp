@@ -254,8 +254,8 @@ namespace diverg {
       typedef typename TRowmap::value_type size_type;
 
       const size_type snnz = entries.size();
-      auto ent_size = ex.graph.entries.extent( 0 );
-      assert( ent_size == ex.nnz() );
+      const size_type ent_size = ex.graph.entries.extent( 0 );
+      assert( ent_size == static_cast< size_type >( ex.nnz() ) );
       diverg::resize( entries, snnz + ent_size );
       auto ent_start = entries.begin() + snnz;
       std::transform( ex.graph.entries.data(), ex.graph.entries.data() + ent_size,
