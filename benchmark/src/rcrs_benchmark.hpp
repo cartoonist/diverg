@@ -23,6 +23,7 @@
 
 #include <diverg/basic_types.hpp>
 #include <diverg/dindex.hpp>
+#include <diverg/range_sparse_utils.hpp>
 
 #define RCRS_BENCHMARK_DEFAULT_TEAM_WORK_SIZE 16
 #define RCRS_BENCHMARK_DEFAULT_TEAM_WORK_SIZE_STR                             \

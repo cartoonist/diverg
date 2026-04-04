@@ -19,6 +19,7 @@
 #include <gum/graph.hpp>
 #include <gum/io_utils.hpp>
 #include <diverg/range_sparse.hpp>
+#include <diverg/range_sparse_utils.hpp>
 #include <diverg/dindex.hpp>
 #include <string>
 
