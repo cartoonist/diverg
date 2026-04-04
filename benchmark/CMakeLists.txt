@@ -25,12 +25,8 @@ add_executable(rcrs_benchmark ${RCRS_BENCH_SOURCES})
 target_compile_options(rcrs_benchmark PRIVATE ${DIVERG_BENCHMARK_DEFAULT_CXXOPS})
 target_link_options(rcrs_benchmark PRIVATE ${DIVERG_BENCHMARK_DEFAULT_LDOPS})
 target_include_directories(rcrs_benchmark
-  # TODO: Use `diverg::libdiverg`
-  #PRIVATE diverg::libdiverg
-  PRIVATE diverg::libdiverg_headers)
+  PRIVATE diverg::diverg)
 target_link_libraries(rcrs_benchmark
-  # TODO: Use `diverg::libdiverg`
-  #PRIVATE diverg::libdiverg
-  PRIVATE diverg::libdiverg_headers)
+  PRIVATE diverg::diverg)
 # Install targets
 install(TARGETS rcrs_benchmark DESTINATION ${CMAKE_INSTALL_BINDIR})

@@ -19,12 +19,13 @@ if(NOT TARGET Kokkos::kokkos)
   add_subdirectory(${Kokkos_SOURCE_DIR})
 endif()
 
-# When `kokkos-kernels` is not found
-if(NOT TARGET Kokkos::kokkoskernels)
+# When `kokkos-kernels` is not found (optional: only when DIVERG_ENABLE_UTILS)
+if(DIVERG_ENABLE_UTILS AND NOT TARGET Kokkos::kokkoskernels)
   if(NOT USE_BUNDLED_KOKKOS_KERNELS)
     message(FATAL_ERROR "KokkosKernels library not found. "
       "Pass in `-DUSE_BUNDLED_KOKKOS_KERNELS=on` when running cmake to use the bundled "
-      "version. It will be installed alongside the library.")
+      "version. It will be installed alongside the library. "
+      "Alternatively, pass `-DDIVERG_ENABLE_UTILS=off` to build without it.")
   endif()
   message(STATUS "Using bundled kokkos-kernels library")
   set(KokkosKernels_SOURCE_DIR ${PROJECT_SOURCE_DIR}/ext/kokkos-kernels)

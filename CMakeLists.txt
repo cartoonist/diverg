@@ -7,6 +7,14 @@ option(BUILD_BENCHMARKING "Build benchmark program" OFF)
 option(DIVERG_ETI "Build compiled library with ETI" OFF)
 option(DIVERG_ENABLE_OPENMP "Enable OpenMP as host execution space" ON)
 option(DIVERG_ENABLE_CUDA "Enable CUDA as device execution space" OFF)
+# Remember whether user explicitly provided DIVERG_ENABLE_UTILS before option()
+# sets the default.
+if(DEFINED CACHE{DIVERG_ENABLE_UTILS})
+  set(_DIVERG_UTILS_USER_SET TRUE)
+else()
+  set(_DIVERG_UTILS_USER_SET FALSE)
+endif()
+option(DIVERG_ENABLE_UTILS "Enable utility functions (requires KokkosKernels)" OFF)
 option(DIVERG_STRICT_ON_WARNS "Pass '-Werror' flag to compiler" ON)
 option(DIVERG_STATS "Enable statistics collection" OFF)
 option(USE_BUNDLED_KOKKOS "Use bundled Kokkos" OFF)
@@ -14,9 +22,24 @@ option(USE_BUNDLED_KOKKOS_KERNELS "Use bundled KokkosKernels" OFF)
 option(USE_BUNDLED_GUM "Use bundled gum library" OFF)
 option(USE_BUNDLED_ALL "Use all bundled dependencies" OFF)
 
+# Auto-enable DIVERG_ENABLE_UTILS when tests or benchmarks are requested,
+# unless the user explicitly set it to OFF.
+if((BUILD_TESTING OR BUILD_BENCHMARKING) AND NOT DIVERG_ENABLE_UTILS)
+  if(_DIVERG_UTILS_USER_SET)
+    message(FATAL_ERROR
+      "BUILD_TESTING and BUILD_BENCHMARKING require DIVERG_ENABLE_UTILS=ON, "
+      "but it was explicitly disabled.")
+  else()
+    message(STATUS "Enabling DIVERG_ENABLE_UTILS (required by BUILD_TESTING/BUILD_BENCHMARKING)")
+    set(DIVERG_ENABLE_UTILS ON CACHE BOOL "Enable utility functions (requires KokkosKernels)" FORCE)
+  endif()
+endif()
+
 if(USE_BUNDLED_ALL)
   set(USE_BUNDLED_KOKKOS on)
-  set(USE_BUNDLED_KOKKOS_KERNELS on)
+  if(DIVERG_ENABLE_UTILS)
+    set(USE_BUNDLED_KOKKOS_KERNELS on)
+  endif()
   set(USE_BUNDLED_GUM on)
 endif(USE_BUNDLED_ALL)
 
@@ -31,7 +54,9 @@ if(DIVERG_ENABLE_OPENMP)
   find_package(OpenMP REQUIRED)
 endif(DIVERG_ENABLE_OPENMP)
 find_package(Kokkos QUIET)
-find_package(KokkosKernels QUIET)
+if(DIVERG_ENABLE_UTILS)
+  find_package(KokkosKernels QUIET)
+endif()
 find_package(gum 2.0.2 QUIET)
 # Handle bundled dependencies
 include(${PROJECT_SOURCE_DIR}/ext/external.cmake)
@@ -58,13 +83,20 @@ add_library(libdiverg_headers INTERFACE)
 target_include_directories(libdiverg_headers
   INTERFACE $<BUILD_INTERFACE:${PROJECT_SOURCE_DIR}/include>;$<INSTALL_INTERFACE:$<INSTALL_PREFIX>/${CMAKE_INSTALL_INCLUDEDIR}>
   INTERFACE $<TARGET_PROPERTY:gum::gum,INTERFACE_INCLUDE_DIRECTORIES>
-  INTERFACE $<TARGET_PROPERTY:Kokkos::kokkos,INTERFACE_INCLUDE_DIRECTORIES>
-  INTERFACE $<TARGET_PROPERTY:Kokkos::kokkoskernels,INTERFACE_INCLUDE_DIRECTORIES>)
+  INTERFACE $<TARGET_PROPERTY:Kokkos::kokkos,INTERFACE_INCLUDE_DIRECTORIES>)
 # Defining link libraries
 target_link_libraries(libdiverg_headers
   INTERFACE $<BUILD_INTERFACE:gum::gum>;$<INSTALL_INTERFACE:gum::gum>
-  INTERFACE $<BUILD_INTERFACE:Kokkos::kokkos>;$<INSTALL_INTERFACE:Kokkos::kokkos>
-  INTERFACE $<BUILD_INTERFACE:Kokkos::kokkoskernels>;$<INSTALL_INTERFACE:Kokkos::kokkoskernels>)
+  INTERFACE $<BUILD_INTERFACE:Kokkos::kokkos>;$<INSTALL_INTERFACE:Kokkos::kokkos>)
+
+# Optional KokkosKernels utilities
+if(DIVERG_ENABLE_UTILS)
+  target_include_directories(libdiverg_headers
+    INTERFACE $<TARGET_PROPERTY:Kokkos::kokkoskernels,INTERFACE_INCLUDE_DIRECTORIES>)
+  target_link_libraries(libdiverg_headers
+    INTERFACE $<BUILD_INTERFACE:Kokkos::kokkoskernels>;$<INSTALL_INTERFACE:Kokkos::kokkoskernels>)
+  target_compile_definitions(libdiverg_headers INTERFACE DIVERG_HAS_KOKKOSKERNELS)
+endif()
 # Use C++14
 target_compile_features(libdiverg_headers INTERFACE cxx_std_14)
 
@@ -78,6 +110,9 @@ configure_file(include/diverg/config.hpp.in ${PROJECT_SOURCE_DIR}/include/diverg
 
 # Setting header files
 file(GLOB HEADER_FILES RELATIVE "${PROJECT_SOURCE_DIR}/include" "${PROJECT_SOURCE_DIR}/include/diverg/*.hpp")
+if(NOT DIVERG_ENABLE_UTILS)
+  list(FILTER HEADER_FILES EXCLUDE REGEX "range_sparse_utils\\.hpp$")
+endif()
 # Keep ETI headers separate: they install into diverg/eti/
 file(GLOB ETI_HEADER_FILES RELATIVE "${PROJECT_SOURCE_DIR}/include" "${PROJECT_SOURCE_DIR}/include/diverg/eti/*.hpp")
 list(TRANSFORM HEADER_FILES PREPEND "${PROJECT_SOURCE_DIR}/include/" OUTPUT_VARIABLE BUILD_HEADER_FILES)
