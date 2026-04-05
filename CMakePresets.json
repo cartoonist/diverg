@@ -7,12 +7,20 @@
     },
     "configurePresets": [
         {
+            "name": "base",
+            "displayName": "Base configuration",
+            "description": "Base configuration for library only (no tests or benchmarks)",
+            "cacheVariables": {
+                "CMAKE_CXX_STANDARD": "17",
+                "USE_BUNDLED_ALL": true
+            }
+        },
+        {
             "name": "base-all",
             "displayName": "Base configuration (all)",
             "description": "Base configuration including all targets",
+            "inherits": "base",
             "cacheVariables": {
-                "CMAKE_CXX_STANDARD": "17",
-                "USE_BUNDLED_ALL": true,
                 "BUILD_TESTING": true
             }
         },
@@ -61,6 +69,24 @@
             "displayName": "Release configuration for OpenMP (Ninja)",
             "description": "Release build for OpenMP using Ninja generator",
             "inherits": "default-release-all-omp",
+            "generator": "Ninja"
+        },
+        {
+            "name": "default-release-omp",
+            "displayName": "Release configuration for OpenMP (library only)",
+            "description": "Release build for OpenMP without tests or benchmarks",
+            "inherits": "base",
+            "binaryDir": "${sourceDir}/build/Release",
+            "cacheVariables": {
+                "CMAKE_BUILD_TYPE": "Release",
+                "DIVERG_ENABLE_OPENMP": true
+            }
+        },
+        {
+            "name": "ninja-release-omp",
+            "displayName": "Release configuration for OpenMP (library only, Ninja)",
+            "description": "Release build for OpenMP without tests or benchmarks using Ninja generator",
+            "inherits": "default-release-omp",
             "generator": "Ninja"
         },
         {
@@ -118,6 +144,25 @@
             "displayName": "Release configuration for Cuda (Ninja)",
             "description": "Release build for Cuda using Ninja generator",
             "inherits": "default-release-all-cuda",
+            "generator": "Ninja"
+        },
+        {
+            "name": "default-release-cuda",
+            "displayName": "Release configuration for Cuda (library only)",
+            "description": "Release build for CUDA+OpenMP without tests or benchmarks",
+            "inherits": "base",
+            "binaryDir": "${sourceDir}/build/ReleaseCuda",
+            "cacheVariables": {
+                "CMAKE_BUILD_TYPE": "Release",
+                "DIVERG_ENABLE_CUDA": true,
+                "DIVERG_ENABLE_OPENMP": true
+            }
+        },
+        {
+            "name": "ninja-release-cuda",
+            "displayName": "Release configuration for Cuda (library only, Ninja)",
+            "description": "Release build for CUDA+OpenMP without tests or benchmarks using Ninja generator",
+            "inherits": "default-release-cuda",
             "generator": "Ninja"
         },
         {
