@@ -97,8 +97,8 @@ if(DIVERG_ENABLE_UTILS)
     INTERFACE $<BUILD_INTERFACE:Kokkos::kokkoskernels>;$<INSTALL_INTERFACE:Kokkos::kokkoskernels>)
   target_compile_definitions(libdiverg_headers INTERFACE DIVERG_HAS_KOKKOSKERNELS)
 endif()
-# Use C++14
-target_compile_features(libdiverg_headers INTERFACE cxx_std_14)
+# Use C++17 (required by core: if constexpr in hbitvector.hpp)
+target_compile_features(libdiverg_headers INTERFACE cxx_std_17)
 
 # Define `DIVERG_STATS`
 if(DIVERG_STATS)
