@@ -2431,7 +2431,7 @@ namespace diverg {
   }
 }  // namespace diverg
 
-#ifndef DIVERG_RANGE_SPARSE_ETI_INST__
+#if defined(DIVERG_ETI_ENABLED) && !defined(DIVERG_RANGE_SPARSE_ETI_INST__)
 #  include <diverg/eti/range_sparse.hpp>
 #endif
 

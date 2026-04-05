@@ -113,15 +113,25 @@ file(GLOB HEADER_FILES RELATIVE "${PROJECT_SOURCE_DIR}/include" "${PROJECT_SOURC
 if(NOT DIVERG_ENABLE_UTILS)
   list(FILTER HEADER_FILES EXCLUDE REGEX "range_sparse_utils\\.hpp$")
 endif()
-# Keep ETI headers separate: they install into diverg/eti/
-file(GLOB ETI_HEADER_FILES RELATIVE "${PROJECT_SOURCE_DIR}/include" "${PROJECT_SOURCE_DIR}/include/diverg/eti/*.hpp")
+if(NOT DIVERG_ETI)
+  list(FILTER HEADER_FILES EXCLUDE REGEX "eti_macros\\.hpp$")
+endif()
 list(TRANSFORM HEADER_FILES PREPEND "${PROJECT_SOURCE_DIR}/include/" OUTPUT_VARIABLE BUILD_HEADER_FILES)
-list(TRANSFORM ETI_HEADER_FILES PREPEND "${PROJECT_SOURCE_DIR}/include/" OUTPUT_VARIABLE BUILD_ETI_HEADER_FILES)
 list(TRANSFORM HEADER_FILES PREPEND "${CMAKE_INSTALL_FULL_INCLUDEDIR}/" OUTPUT_VARIABLE INSTALL_HEADER_FILES)
-list(TRANSFORM ETI_HEADER_FILES PREPEND "${CMAKE_INSTALL_FULL_INCLUDEDIR}/" OUTPUT_VARIABLE INSTALL_ETI_HEADER_FILES)
-# Defining target sources (ETI headers included for IDE visibility)
-target_sources(libdiverg_headers
-  INTERFACE "$<BUILD_INTERFACE:${BUILD_HEADER_FILES};${BUILD_ETI_HEADER_FILES}>;$<INSTALL_INTERFACE:${INSTALL_HEADER_FILES};${INSTALL_ETI_HEADER_FILES}>")
+# ETI headers are only included when building the compiled library
+if(DIVERG_ETI)
+  file(GLOB ETI_HEADER_FILES RELATIVE "${PROJECT_SOURCE_DIR}/include" "${PROJECT_SOURCE_DIR}/include/diverg/eti/*.hpp")
+  list(TRANSFORM ETI_HEADER_FILES PREPEND "${PROJECT_SOURCE_DIR}/include/" OUTPUT_VARIABLE BUILD_ETI_HEADER_FILES)
+  list(TRANSFORM ETI_HEADER_FILES PREPEND "${CMAKE_INSTALL_FULL_INCLUDEDIR}/" OUTPUT_VARIABLE INSTALL_ETI_HEADER_FILES)
+endif()
+# Defining target sources (ETI headers included for IDE visibility when applicable)
+if(DIVERG_ETI)
+  target_sources(libdiverg_headers
+    INTERFACE "$<BUILD_INTERFACE:${BUILD_HEADER_FILES};${BUILD_ETI_HEADER_FILES}>;$<INSTALL_INTERFACE:${INSTALL_HEADER_FILES};${INSTALL_ETI_HEADER_FILES}>")
+else()
+  target_sources(libdiverg_headers
+    INTERFACE "$<BUILD_INTERFACE:${BUILD_HEADER_FILES}>;$<INSTALL_INTERFACE:${INSTALL_HEADER_FILES}>")
+endif()
 
 # Defining `diverg::libdiverg_headers` alias
 add_library(diverg::libdiverg_headers ALIAS libdiverg_headers)
@@ -167,8 +177,10 @@ endif()
 
 # Install headers
 install(FILES ${BUILD_HEADER_FILES} DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}/diverg)
-install(DIRECTORY ${PROJECT_SOURCE_DIR}/include/diverg/eti
-  DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}/diverg)
+if(DIVERG_ETI)
+  install(DIRECTORY ${PROJECT_SOURCE_DIR}/include/diverg/eti
+    DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}/diverg)
+endif()
 # Export targets
 if(DIVERG_ETI)
   install(TARGETS libdiverg_headers libdiverg EXPORT diverg-targets

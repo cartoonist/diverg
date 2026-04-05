@@ -1337,7 +1337,7 @@ namespace diverg {
   };
 }  /* --- end of namespace diverg --- */
 
-#ifndef DIVERG_HBITVECTOR_ETI_INST__
+#if defined(DIVERG_ETI_ENABLED) && !defined(DIVERG_HBITVECTOR_ETI_INST__)
 #  include <diverg/eti/hbitvector.hpp>
 #endif
 
