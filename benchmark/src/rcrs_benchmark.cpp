@@ -84,9 +84,8 @@ copy_xcrs( TXCRSMatrix2 mat, Kokkos::Timer* timer_ptr = nullptr )
 
   if ( timer_ptr ) {
     dst_exec_space{}.fence();
-    auto duration = timer_ptr->seconds();
-    std::cout << "diverg::rcrs_benchmark::copy_xcrs time: " << duration * 1000
-              << "ms" << std::endl;
+    auto duration = timer_ptr->seconds() * 1000;
+    std::cout << "diverg::rcrs_benchmark::copy_xcrs time: " << duration << "ms" << std::endl;
   }
 
   return dst_matrix_type( "moved", mat.numRows(), values, crs_graph );
@@ -125,9 +124,8 @@ kokkos_kernels_spgemm( TXCRSMatrix const& a, TXCRSMatrix const& b,
 
     if ( timer_ptr ) {
       execution_space{}.fence();
-      auto duration = timer_ptr->seconds();
-      std::cout << "Kokkos::SpGEMM_symbolic time: " << duration * 1000 << "ms"
-                << std::endl;
+      auto duration = timer_ptr->seconds() * 1000;
+      std::cout << "Kokkos::SpGEMM_symbolic time: " << duration << "ms" << std::endl;
     }
   }
 
@@ -138,9 +136,8 @@ kokkos_kernels_spgemm( TXCRSMatrix const& a, TXCRSMatrix const& b,
 
     if ( timer_ptr ) {
       execution_space{}.fence();
-      auto duration = timer_ptr->seconds();
-      std::cout << "Kokkos::SpGEMM_numeric time: " << duration * 1000 << "ms"
-                << std::endl;
+      auto duration = timer_ptr->seconds() * 1000;
+      std::cout << "Kokkos::SpGEMM_numeric time: " << duration << "ms" << std::endl;
     }
   }
 
@@ -182,9 +179,8 @@ kokkos_kernels_spadd( TXCRSMatrix const& a, TXCRSMatrix const& b,
 
     if ( timer_ptr ) {
       execution_space{}.fence();
-      auto duration = timer_ptr->seconds();
-      std::cout << "Kokkos::SpAdd_symbolic time: " << duration * 1000 << "ms"
-                << std::endl;
+      auto duration = timer_ptr->seconds() * 1000;
+      std::cout << "Kokkos::SpAdd_symbolic time: " << duration << "ms" << std::endl;
     }
   }
 
@@ -195,9 +191,8 @@ kokkos_kernels_spadd( TXCRSMatrix const& a, TXCRSMatrix const& b,
 
     if ( timer_ptr ) {
       execution_space{}.fence();
-      auto duration = timer_ptr->seconds();
-      std::cout << "Kokkos::SpAdd_numeric time: " << duration * 1000 << "ms"
-                << std::endl;
+      auto duration = timer_ptr->seconds() * 1000;
+      std::cout << "Kokkos::SpAdd_numeric time: " << duration << "ms" << std::endl;
     }
   }
 
@@ -235,9 +230,8 @@ kokkos_kernels_power( TXCRSMatrix const& a, unsigned int n,
 
   if ( timer_ptr ) {
     execution_space{}.fence();
-    auto duration = timer_ptr->seconds();
-    std::cout << "KokkosKernels::power time: " << duration * 1000 << "ms"
-              << std::endl;
+    auto duration = timer_ptr->seconds() * 1000;
+    std::cout << "KokkosKernels::power time: " << duration << "ms" << std::endl;
   }
 
   return c;
@@ -269,10 +263,9 @@ create_dindex_pairg( TXCRSMatrix a, int dlo, int dup, int verbose = 0,
 
           if ( timer2_ptr ) {
             space.fence();
-            auto duration = timer2_ptr->seconds();
-            std::cout
-                << "diverg::create_dindex_pairg::create_identity_matrix time: "
-                << duration * 1000 << "ms" << std::endl;
+            auto duration = timer2_ptr->seconds() * 1000;
+            std::cout << "diverg::create_dindex_pairg::create_identity_matrix time: "
+                      << duration << "ms" << std::endl;
           }
 
           if ( timer2_ptr ) timer2_ptr->reset();
@@ -281,10 +274,9 @@ create_dindex_pairg( TXCRSMatrix a, int dlo, int dup, int verbose = 0,
 
           if ( timer2_ptr ) {
             space.fence();
-            auto duration = timer2_ptr->seconds();
-            std::cout
-                << "diverg::create_dindex_pairg::kokkos_kernels_spadd time: "
-                << duration * 1000 << "ms" << std::endl;
+            auto duration = timer2_ptr->seconds() * 1000;
+            std::cout << "diverg::create_dindex_pairg::kokkos_kernels_spadd time: "
+                      << duration << "ms" << std::endl;
           }
         }  // free: I
 
@@ -308,9 +300,8 @@ create_dindex_pairg( TXCRSMatrix a, int dlo, int dup, int verbose = 0,
 
     if ( timer1_ptr ) {
       space.fence();
-      auto duration = timer1_ptr->seconds();
-      std::cout << "diverg::create_dindex_pairg time: " << duration * 1000
-                << "ms" << std::endl;
+      auto duration = timer1_ptr->seconds() * 1000;
+      std::cout << "diverg::create_dindex_pairg time: " << duration << "ms" << std::endl;
     }
   }  // free: ad, aid
 
@@ -384,9 +375,9 @@ benchmark_dindex_graph( TSparseConfig config, TGraph const& graph, int dlo,
   auto h_a = diverg::util::adjacency_matrix< xcrs_host_mirror >(
       graph, start_rank, end_rank );
 
-  auto duration = timer.seconds();
+  auto duration = timer.seconds() * 1000;
   std::cout << "diverg::benchmark_dindex_graph::adjacency_matrix time: "
-            << duration * 1000 << "ms" << std::endl;
+            << duration << "ms" << std::endl;
 
   std::cout << "Adjacency matrix has order " << h_a.numRows() << "x"
             << h_a.numCols() << " and holds " << h_a.nnz()
@@ -421,9 +412,9 @@ benchmark_dindex_graph( TSparseConfig config, TGraph const& graph, int dlo,
       results[ i ] = query_index( h_c, pairs[ i ].first, pairs[ i ].second );
     }
 
-    auto duration = timer.seconds();
+    auto duration = timer.seconds() * 1000;
     std::cout << "diverg::benchmark_dindex_graph::pairg_query_index time: "
-              << duration * 1000 << "ms" << std::endl;
+              << duration << "ms" << std::endl;
   }
 
   if ( run_rspgemm ) {
@@ -435,9 +426,9 @@ benchmark_dindex_graph( TSparseConfig config, TGraph const& graph, int dlo,
 
     range_crsmatrix_t ra( h_a );
 
-    auto duration = timer.seconds();
+    auto duration = timer.seconds() * 1000;
     std::cout << "diverg::create_dindex::to_rcrsmatrix(h_a) time (host->host): "
-              << duration * 1000 << "ms" << std::endl;
+              << duration << "ms" << std::endl;
 
     std::shared_ptr< Kokkos::Timer > inner_timer = nullptr;
     if ( verbose > 1 ) inner_timer = std::make_shared< Kokkos::Timer >();
@@ -465,9 +456,9 @@ benchmark_dindex_graph( TSparseConfig config, TGraph const& graph, int dlo,
       results[ i ] = rc( pairs[ i ].first, pairs[ i ].second );
     }
 
-    duration = timer.seconds();
+    duration = timer.seconds() * 1000;
     std::cout << "diverg::benchmark_dindex_graph::diverg_query_index time: "
-              << duration * 1000 << "ms" << std::endl;
+              << duration << "ms" << std::endl;
 
     std::cout << "Converting to `RangeCompress` index (on host)..."
               << std::endl;
@@ -475,9 +466,9 @@ benchmark_dindex_graph( TSparseConfig config, TGraph const& graph, int dlo,
 
     cmp_range_crsmatrix_t cmp_rc( rc );
 
-    duration = timer.seconds();
+    duration = timer.seconds() * 1000;
     std::cout << "diverg::benchmark_dindex_graph::range_compressed_index time: "
-              << duration * 1000 << "ms" << std::endl;
+              << duration << "ms" << std::endl;
 
     std::cout << "RangeCompressed index size: " << cmp_rc.size_in_bytes()
               << " Bytes" << std::endl;
@@ -489,9 +480,9 @@ benchmark_dindex_graph( TSparseConfig config, TGraph const& graph, int dlo,
       results[ i ] = rc( pairs[ i ].first, pairs[ i ].second );
     }
 
-    duration = timer.seconds();
+    duration = timer.seconds() * 1000;
     std::cout << "diverg::benchmark_dindex_graph::diverg_query_compressed_index time: "
-              << duration * 1000 << "ms" << std::endl;
+              << duration << "ms" << std::endl;
 
     if ( output ) cmp_rc.serialize( output );
 
@@ -532,9 +523,9 @@ benchmark_dindex_random( TSparseConfig config, TOrdinal n, TSize nnz, int dlo,
   range_crsmatrix_t ra;
   auto a = create_random_binary_matrix< xcrsmatrix_t >( n, nnz, ra /*, seed*/ );
 
-  auto duration = timer.seconds();
+  auto duration = timer.seconds() * 1000;
   std::cout << "diverg::benchmark_dindex_random::create_random_binary_matrix time: "
-            << duration * 1000 << "ms" << std::endl;
+            << duration << "ms" << std::endl;
 
   std::cout << "Random binary matrix has order " << a.numRows() << "x"
             << a.numCols() << " and holds " << a.nnz() << " non-zero elements"
@@ -567,9 +558,9 @@ benchmark_dindex_random( TSparseConfig config, TOrdinal n, TSize nnz, int dlo,
       results[ i ] = query_index( h_c, pairs[ i ].first, pairs[ i ].second );
     }
 
-    auto duration = timer.seconds();
+    auto duration = timer.seconds() * 1000;
     std::cout << "diverg::benchmark_dindex_random::pairg_query_index time: "
-              << duration * 1000 << "ms" << std::endl;
+              << duration << "ms" << std::endl;
   }
 
   if ( run_rspgemm ) {
@@ -601,9 +592,9 @@ benchmark_dindex_random( TSparseConfig config, TOrdinal n, TSize nnz, int dlo,
       results[ i ] = rc( pairs[ i ].first, pairs[ i ].second );
     }
 
-    auto duration = timer.seconds();
+    auto duration = timer.seconds() * 1000;
     std::cout << "diverg::benchmark_dindex_random::diverg_query_index time: "
-              << duration * 1000 << "ms" << std::endl;
+              << duration << "ms" << std::endl;
 
     std::cout << "Converting to `RangeCompress` index (on host)..."
               << std::endl;
@@ -611,9 +602,9 @@ benchmark_dindex_random( TSparseConfig config, TOrdinal n, TSize nnz, int dlo,
 
     cmp_range_crsmatrix_t cmp_rc( rc );
 
-    duration = timer.seconds();
+    duration = timer.seconds() * 1000;
     std::cout << "diverg::benchmark_dindex_random::range_compressed_index time: "
-              << duration * 1000 << "ms" << std::endl;
+              << duration << "ms" << std::endl;
 
     std::cout << "RangeCompressed index size: " << cmp_rc.size_in_bytes()
               << " Bytes" << std::endl;
@@ -625,9 +616,9 @@ benchmark_dindex_random( TSparseConfig config, TOrdinal n, TSize nnz, int dlo,
       results[ i ] = rc( pairs[ i ].first, pairs[ i ].second );
     }
 
-    duration = timer.seconds();
+    duration = timer.seconds() * 1000;
     std::cout << "diverg::benchmark_dindex_random::diverg_query_compressed_index time: "
-              << duration * 1000 << "ms" << std::endl;
+              << duration << "ms" << std::endl;
 
     if ( output ) cmp_rc.serialize( output );
 
