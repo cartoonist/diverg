@@ -19,7 +19,11 @@
 #ifndef DIVERG_RCRS_BENCHMARK_HPP__
 #define DIVERG_RCRS_BENCHMARK_HPP__
 
+#include <algorithm>
 #include <cmath>
+#include <numeric>
+#include <random>
+#include <vector>
 
 #include <diverg/basic_types.hpp>
 #include <diverg/dindex.hpp>
@@ -47,6 +51,7 @@ struct Options {
   std::string reg_name;
   std::string partition;
   std::string grid;
+  std::string ordering;
   unsigned int l1size;
   bool run_kokkos;
   bool run_rspgemm;
@@ -57,9 +62,10 @@ struct Options {
   int verbose;
   /* === LIFECYCLE === */
   Options()
-      : graph_path( "" ), format( "" ), n( 0 ), nnz( 0 ), dlo( 0 ), dup( 0 ),
-        seg_name( "" ), reg_name( "" ), partition( "team-sequential" ),
-        grid( "auto" ), l1size( 8192 ), run_kokkos( true ),
+      : graph_path( "" ), format( "" ), n( 0 ), nnz( 0 ), seed( 0 ), dlo( 0 ),
+        dup( 0 ), seg_name( "" ), reg_name( "" ),
+        partition( "team-sequential" ), grid( "auto" ),
+        ordering( "min-breaks" ), l1size( 8192 ), run_kokkos( true ),
         run_rspgemm( true ), host( false ), query_count( 1000000 ),
         out_path( "" ), compare( false ), verbose( 0 )
   { }
@@ -128,6 +134,10 @@ parse_arguments( int argc, char* argv[] )
       opts.grid = argv[ ++i ];
       std::cout << "Parameter: grid <- " << opts.grid << std::endl;
     }
+    else if ( ( strcmp( argv[ i ], "-O" ) == 0 ) || ( strcmp( argv[ i ], "--ordering" ) == 0 ) ) {
+      opts.ordering = argv[ ++i ];
+      std::cout << "Parameter: ordering <- " << opts.ordering << std::endl;
+    }
     else if ( ( strcmp( argv[ i ], "-l" ) == 0 ) || ( strcmp( argv[ i ], "--l1-size" ) == 0 ) ) {
       opts.l1size = pow( 2, atoi( argv[ ++i ] ) );
       std::cout << "Parameter: l1size <- " << opts.l1size << std::endl;
@@ -185,6 +195,10 @@ parse_arguments( int argc, char* argv[] )
           << RCRS_BENCHMARK_DEFAULT_TEAM_WORK_SIZE_STR << "\n"
           << "                               (any non-numeric, non-whitespace delimiter works)\n"
           << "                               examples: '-G 32,4,16' or '-G 16x16'\n"
+          << "  --ordering (-O) <str>:       Node ordering applied before indexing:\n"
+          << "                               'native' (skip sort), 'topological',\n"
+          << "                               'cuthill-mckee', 'random' (seeded via --rng-seed),\n"
+          << "                               'min-breaks' (default)\n"
           << "  --l1-size (-l) <int>:        exponent num, determines L1 size of accumulator 2^num;\n"
           << "                               with constraints: 10<=num<=15 (default: 2^13 = 1KB)\n"
           << "  --host (-H):                 run on host (default: false)\n"
@@ -277,8 +291,12 @@ check_options( Options< TOrdinal, TSize >& opts )
 
 template< typename TGraph >
 TGraph
-load_graph( std::string const& graph_path, std::string const& format )
+load_graph( std::string const& graph_path, std::string const& format,
+            std::string const& ordering = "min-breaks",
+            unsigned int seed = 0 )
 {
+  using rank_type = typename TGraph::rank_type;
+
   TGraph graph;
   typename TGraph::dynamic_type dyn_graph;
 
@@ -293,27 +311,64 @@ load_graph( std::string const& graph_path, std::string const& format )
     gum::util::extend( dyn_graph, gg, sorted );
   };
 
+  // Load with sort=false so the graph preserves the input file's node order.
   if ( format == "gfa" ) {
     std::cout << "Auto-detecting GFA version..." << std::endl;
-    gum::util::load_gfa( dyn_graph, graph_path, true );
+    gum::util::load_gfa( dyn_graph, graph_path, false );
   }
   else if ( format == "gfa1" ) {
     std::cout << "Enforcing GFA version 1.0..." << std::endl;
-    load_versioned_gfa( dyn_graph, graph_path, true, 1.0 );
+    load_versioned_gfa( dyn_graph, graph_path, false, 1.0 );
   }
   else if ( format == "gfa2" ) {
     std::cout << "Enforcing GFA version 2.0..." << std::endl;
-    load_versioned_gfa( dyn_graph, graph_path, true, 2.0 );
+    load_versioned_gfa( dyn_graph, graph_path, false, 2.0 );
   }
   else if ( format == "" ) {
     std::cout << "Auto-detecting graph file format..." << std::endl;
-    gum::util::load( dyn_graph, graph_path, true );
+    gum::util::load( dyn_graph, graph_path, false );
   }
   else
     throw std::runtime_error( "[ERROR] unknown file format '" + format + "'" );
 
-  std::cout << "Sorting node to minimise index breaks (gum)..." << std::endl;
-  gum::util::min_breaks_sort( dyn_graph );
+  if ( ordering == "native" ) {
+    std::cout << "Ordering: native" << std::endl;
+  }
+  else if ( ordering == "topological" ) {
+    std::cout << "Ordering: topological" << std::endl;
+    // forced so the topological order is applied even when graph is not a DAG.
+    bool dag = gum::util::topological_sort( dyn_graph, /*force=*/true,
+                                            /*reverse=*/false );
+    if ( !dag ) {
+      std::cerr << "[INFO] Graph is not a DAG; applied semi-topological ordering."
+                << std::endl;
+    }
+  }
+  else if ( ordering == "cuthill-mckee" ) {
+    std::cout << "Ordering: cuthill-mckee" << std::endl;
+    gum::util::cuthill_mckee_sort( dyn_graph );
+  }
+  else if ( ordering == "random" ) {
+    if ( seed == 0 ) {
+      seed = diverg::random::rd();
+      std::cout << "Random seed: " << seed << std::endl;
+    }
+    std::cout << "Ordering: random" << std::endl;
+    auto n = static_cast< std::size_t >( dyn_graph.get_node_count() );
+    std::vector< rank_type > perm( n );
+    std::iota( perm.begin(), perm.end(), static_cast< rank_type >( 0 ) );
+    std::mt19937 rng( seed );
+    std::shuffle( perm.begin(), perm.end(), rng );
+    dyn_graph.sort_nodes( perm );
+  }
+  else if ( ordering == "min-breaks" ) {
+    std::cout << "Ordering: min-breaks..." << std::endl;
+    gum::util::min_breaks_sort( dyn_graph );
+  }
+  else {
+    throw std::runtime_error( "[ERROR] Unknown ordering '" + ordering + "'" );
+  }
+
   std::cout << "Converting to a Succinct graph (gum)..." << std::endl;
   graph = dyn_graph;
 

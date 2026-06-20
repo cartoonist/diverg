@@ -383,6 +383,11 @@ benchmark_dindex_graph( TSparseConfig config, TGraph const& graph, int dlo,
             << h_a.numCols() << " and holds " << h_a.nnz()
             << " non-zero elements" << std::endl;
 
+  {
+    auto bw = gum::util::chargraph_bandwidth( graph );
+    std::cout << "Adjacency matrix bandwidth: " << bw << std::endl;
+  }
+
   auto pairs = create_random_pairs( h_a.numRows(), query_count );
 
   xcrs_host_mirror h_c;
@@ -429,6 +434,15 @@ benchmark_dindex_graph( TSparseConfig config, TGraph const& graph, int dlo,
     auto duration = timer.seconds() * 1000;
     std::cout << "diverg::create_dindex::to_rcrsmatrix(h_a) time (host->host): "
               << duration << "ms" << std::endl;
+
+    {
+      auto ranges_total = ra.rowMap( ra.numRows() ) / 2;
+      double avg_per_row = static_cast< double >( ranges_total ) / ra.numRows();
+      std::cout << "diverg::benchmark_dindex_graph::adj_rcrs_ranges_total metric: "
+                << ranges_total << std::endl;
+      std::cout << "diverg::benchmark_dindex_graph::adj_rcrs_ranges_per_row metric: "
+                << avg_per_row << std::endl;
+    }
 
     std::shared_ptr< Kokkos::Timer > inner_timer = nullptr;
     if ( verbose > 1 ) inner_timer = std::make_shared< Kokkos::Timer >();
@@ -649,7 +663,8 @@ benchmark_dindex( Options< TOrdinal, TSize > opts,
   else {
     using graph_type = gum::SeqGraph< gum::Succinct >;
 
-    auto graph = load_graph< graph_type >( opts.graph_path, opts.format );
+    auto graph = load_graph< graph_type >( opts.graph_path, opts.format,
+                                           opts.ordering, opts.seed );
     auto rank_range = region_nodes_rank_range( graph, opts.reg_name, opts.seg_name );
     benchmark_dindex_graph< TOrdinal, TSize, TScalar >(
         config, graph, opts.dlo, opts.dup, rank_range.first, rank_range.second,
