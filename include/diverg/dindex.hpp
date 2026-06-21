@@ -20,6 +20,7 @@
 #define DIVERG_DINDEX_HPP__
 
 #include <algorithm>
+#include <vector>
 
 #include <gum/graph.hpp>
 
@@ -225,6 +226,96 @@ namespace diverg {
       assert( irow == static_cast< size_type >( nrows + 1 ) );
 
       return TCrsMatrix( "adjacency matrix", nrows, nrows, nnz, values, rowmap, entries );
+    }
+
+    /**
+     *  @brief  Get the adjacency matrix of the graph directly in Range CRS format.
+     *
+     *  @param[in]  graph  The graph.
+     *  @param[in]  lower  The lower node rank (inclusive).
+     *  @param[in]  upper  The upper node rank (exclusive).
+     *  @return  The adjacency matrix as a Range CRS matrix (`TRangeCRSMatrix`).
+     *
+     *  Like `adjacency_matrix`, but builds the matrix directly in diverg's
+     *  Range CRS format using only Kokkos core. It does not go through a
+     *  `KokkosSparse::CrsMatrix` and therefore does not require KokkosKernels.
+     *  The resulting matrix is local (0-based) and square with order equal to
+     *  the number of loci in the node rank range [lower, upper).
+     *
+     *  NOTE: This function assumes the range [lower, upper) exclusively covers all
+     *  nodes in the component(s).
+     */
+    template< typename TRangeCRSMatrix, class TGraph >
+    inline TRangeCRSMatrix
+    range_adjacency_matrix( TGraph const& graph,
+                            typename TGraph::rank_type lower=1,
+                            typename TGraph::rank_type upper=0 )
+    {
+      typedef TGraph graph_type;
+      typedef typename graph_type::id_type id_type;
+      typedef typename graph_type::offset_type offset_type;
+      typedef typename graph_type::rank_type rank_type;
+      typedef typename graph_type::linktype_type linktype_type;
+
+      typedef TRangeCRSMatrix crsmat_type;
+      typedef typename crsmat_type::ordinal_type ordinal_type;
+      typedef typename crsmat_type::size_type size_type;
+      typedef typename crsmat_type::entries_type entries_type;
+      typedef typename crsmat_type::rowmap_type rowmap_type;
+
+      static_assert(
+          std::is_same< typename crs_matrix::Group< typename crsmat_type::spec_type >::type,
+                        crs_matrix::RangeGroup >::value,
+          "output matrix should be in Range CRS format." );
+
+      if ( upper == 0 ) upper = graph.get_node_count() + 1;
+      ordinal_type nrows = gum::util::total_nof_loci( graph, lower, upper );
+      size_type nnz = nrows - _node_count( graph, lower, upper ) +
+          _edge_count( graph, lower, upper );
+
+      /* Build a basic CRS adjacency (sorted column indices per row) on host. */
+      std::vector< ordinal_type > b_entries( nnz );
+      std::vector< size_type > b_rowmap( nrows + 1 );
+
+      offset_type cursor = 0;
+      offset_type start = gum::util::id_to_charorder( graph, graph.rank_to_id( lower ) );
+      size_type i = 0;
+      size_type irow = 0;
+      b_rowmap[ irow++ ] = i;
+      graph.for_each_node(
+          [&]( rank_type rank, id_type id ) {
+            for ( offset_type offset = 1; offset < graph.node_length( id ); ++offset ) {
+              b_entries[ i++ ] = ++cursor;
+              b_rowmap[ irow++ ] = i;
+            }
+            ++cursor;
+            auto entries_begin = b_entries.data() + i;
+            graph.for_each_edges_out(
+                id,
+                [&graph, &b_entries, &i, start]( id_type to, linktype_type ) {
+                  b_entries[ i++ ] = gum::util::id_to_charorder( graph, to ) - start;
+                  return true;
+                } );
+            std::sort( entries_begin, b_entries.data() + i );
+            b_rowmap[ irow++ ] = i;
+            if ( rank + 1 == upper ) return false;
+            return true;
+          },
+          lower );
+      assert( i == nnz );
+      assert( irow == static_cast< size_type >( nrows + 1 ) );
+
+      /* Convert the basic CRS adjacency to Range CRS format. */
+      entries_type r_entries;
+      rowmap_type r_rowmap;
+      crsmat_type::base_type::traits_type::init( r_entries );
+      crsmat_type::base_type::traits_type::init( r_rowmap );
+      diverg::resize( r_rowmap, nrows + 1 );
+      crs_matrix::append( r_entries, r_rowmap, b_entries.data(), b_rowmap.data(),
+                          b_rowmap.data() + b_rowmap.size(), crs_matrix::RangeGroup{},
+                          crs_matrix::BasicGroup{} );
+
+      return crsmat_type( nrows, std::move( r_entries ), std::move( r_rowmap ), nnz );
     }
 
     /**
