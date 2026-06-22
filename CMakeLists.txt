@@ -43,7 +43,7 @@ if(USE_BUNDLED_ALL)
   set(USE_BUNDLED_GUM on)
 endif(USE_BUNDLED_ALL)
 
-project(diverg VERSION 0.9.0 LANGUAGES CXX)
+project(diverg VERSION 1.1.1 LANGUAGES CXX)
 
 # Include external modules
 include(GNUInstallDirs)
