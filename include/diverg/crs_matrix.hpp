@@ -1680,6 +1680,39 @@ namespace diverg {
       return rowmap_device_view_type< TDeviceSpace >{};
     }
 
+    /**
+     *  @brief  Construct (and optionally sized) host entries array.
+     *
+     *  @param[in] n The desired length of the entries array (optional).
+     *
+     *  Hides the spec-specific initialisation (e.g. `Buffered` requires a backing
+     *  tmpfile) so callers do not need to invoke `traits_type::init` manually.
+     */
+    static inline entries_type
+    make_entries( size_type n = 0 )
+    {
+      entries_type entries;
+      traits_type::init( entries );
+      if ( n != 0 ) diverg::resize( entries, n );
+      return entries;
+    }
+
+    /**
+     *  @brief  Construct (and optionally sized) host rowmap array.
+     *
+     *  @param[in] n The desired length of the rowmap array (optional).
+     *
+     *  NOTE: The contents are left unspecified.
+     */
+    static inline rowmap_type
+    make_rowmap( size_type n = 0 )
+    {
+      rowmap_type rowmap;
+      traits_type::init( rowmap );
+      if ( n != 0 ) diverg::resize( rowmap, n );
+      return rowmap;
+    }
+
     template< typename TRowMapDeviceView, typename ...TArgs >
     static inline size_type
     nnz( Kokkos::View< TArgs... > d_entries, TRowMapDeviceView d_rowmap )
@@ -3225,10 +3258,8 @@ namespace diverg {
     typedef typename crsmat_type::ordinal_type ordinal_type;
     typedef typename crsmat_type::size_type size_type;
 
-    typename crsmat_mutable_type::entries_type entries;
-    typename crsmat_mutable_type::rowmap_type rowmap;
-    crsmat_mutable_type::base_type::traits_type::init( entries );
-    crsmat_mutable_type::base_type::traits_type::init( rowmap );
+    auto entries = crsmat_mutable_type::make_entries();
+    auto rowmap = crsmat_mutable_type::make_rowmap();
     size_type cursor1 = 0;    // current entry index in the first distance index
     size_type cursor2 = 0;    // current entry index in the second distance index
     size_type end1;  // last entry index of the row in the first distance index
@@ -3371,10 +3402,8 @@ namespace diverg {
     typedef typename crsmat_type::ordinal_type ordinal_type;
     typedef typename crsmat_type::size_type size_type;
 
-    typename crsmat_mutable_type::entries_type entries;
-    typename crsmat_mutable_type::rowmap_type rowmap;
-    crsmat_mutable_type::base_type::traits_type::init( entries );
-    crsmat_mutable_type::base_type::traits_type::init( rowmap );
+    auto entries = crsmat_mutable_type::make_entries();
+    auto rowmap = crsmat_mutable_type::make_rowmap();
     size_type cursor1 = 0;    // current entry index in the first distance index
     size_type cursor2 = 0;    // current entry index in the second distance index
     size_type end1;  // last entry index of the row in the first distance index

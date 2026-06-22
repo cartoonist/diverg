@@ -260,8 +260,6 @@ namespace diverg {
       typedef TRangeCRSMatrix crsmat_type;
       typedef typename crsmat_type::ordinal_type ordinal_type;
       typedef typename crsmat_type::size_type size_type;
-      typedef typename crsmat_type::entries_type entries_type;
-      typedef typename crsmat_type::rowmap_type rowmap_type;
 
       static_assert(
           std::is_same< typename crs_matrix::Group< typename crsmat_type::spec_type >::type,
@@ -306,11 +304,8 @@ namespace diverg {
       assert( irow == static_cast< size_type >( nrows + 1 ) );
 
       /* Convert the basic CRS adjacency to Range CRS format. */
-      entries_type r_entries;
-      rowmap_type r_rowmap;
-      crsmat_type::base_type::traits_type::init( r_entries );
-      crsmat_type::base_type::traits_type::init( r_rowmap );
-      diverg::resize( r_rowmap, nrows + 1 );
+      auto r_entries = crsmat_type::make_entries();
+      auto r_rowmap = crsmat_type::make_rowmap( nrows + 1 );
       crs_matrix::append( r_entries, r_rowmap, b_entries.data(), b_rowmap.data(),
                           b_rowmap.data() + b_rowmap.size(), crs_matrix::RangeGroup{},
                           crs_matrix::BasicGroup{} );
@@ -345,10 +340,8 @@ namespace diverg {
       typedef typename crsmat_type::ordinal_type ordinal_type;
       typedef typename crsmat_type::size_type size_type;
 
-      typename crsmat_mutable_type::entries_type entries;
-      typename crsmat_mutable_type::rowmap_type rowmap;
-      crsmat_mutable_type::base_type::traits_type::init( entries );
-      crsmat_mutable_type::base_type::traits_type::init( rowmap );
+      auto entries = crsmat_mutable_type::make_entries();
+      auto rowmap = crsmat_mutable_type::make_rowmap();
       rank_type cnode_rank = 0;  // current node rank
       size_type start = 0;    // row start index
       size_type end;          // row end index
