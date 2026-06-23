@@ -98,8 +98,8 @@ namespace diverg {
    */
   template< typename TSpec, typename TOrdinal, typename TSize >
   static /* void */ std::enable_if_t<
-      std::is_same< typename diverg::crs_matrix::Group< TSpec >::type,
-                    diverg::crs_matrix::RangeGroup >::value >
+      diverg::crs_matrix::is_range_crs_matrix<
+          diverg::CRSMatrix< TSpec, bool, TOrdinal, TSize > >::value >
   print( diverg::CRSMatrix< TSpec, bool, TOrdinal, TSize >& m,
          std::string label = {}, bool verbose = true, bool print_all = false )
   {

@@ -261,10 +261,8 @@ namespace diverg {
       typedef typename crsmat_type::ordinal_type ordinal_type;
       typedef typename crsmat_type::size_type size_type;
 
-      static_assert(
-          std::is_same< typename crs_matrix::Group< typename crsmat_type::spec_type >::type,
-                        crs_matrix::RangeGroup >::value,
-          "output matrix should be in Range CRS format." );
+      static_assert( crs_matrix::is_range_crs_matrix< crsmat_type >::value,
+                     "output matrix should be in Range CRS format." );
 
       if ( upper == 0 ) upper = graph.get_node_count() + 1;
       ordinal_type nrows = gum::util::total_nof_loci( graph, lower, upper );
@@ -396,10 +394,8 @@ namespace diverg {
       using execution_space = typename config_type::execution_space;
       using handle_t = SparseRangeHandle< TRCRSMatrix, execution_space >;
       using size_type = typename rcrsmatrix_t::size_type;
-      using rcrs_spec_type = typename rcrsmatrix_t::spec_type;
-      using group_type = typename crs_matrix::Group< rcrs_spec_type >::type;
 
-      static_assert( std::is_same< group_type, crs_matrix::RangeGroup >::value,
+      static_assert( crs_matrix::is_range_crs_matrix< rcrsmatrix_t >::value,
                      "matrix should be in Range CRS format." );
 
       DIVERG_ASSERT( dlo <= dup && dup != 0 );

@@ -98,10 +98,8 @@ namespace diverg {
   create_range_identity_matrix( typename TRCRSMatrix::ordinal_type n, TExecSpace space={} )
   {
     typedef TRCRSMatrix rcrsmatrix_t;
-    typedef typename rcrsmatrix_t::spec_type rcrs_spec_type;
-    typedef typename crs_matrix::Group< rcrs_spec_type >::type group_type;
 
-    static_assert( std::is_same< group_type, crs_matrix::RangeGroup >::value,
+    static_assert( crs_matrix::is_range_crs_matrix< rcrsmatrix_t >::value,
                    "matrix should be in Range CRS format." );
 
     auto i_entries = rcrsmatrix_t::make_entries_device_view( space );

@@ -61,7 +61,7 @@ SCENARIO( "Graph adjacency matrix construction", "[dindex]" )
 
   GIVEN( "A sequence graph" )
   {
-    std::string graph_path = test_data_dir + "/middle/m.gfa";
+    std::string graph_path = test_data_dir + "/multi/multi.gfa";
     graph_type graph;
     gum::util::load( graph, graph_path, gum::util::GFAFormat{}, true );
 
@@ -104,6 +104,70 @@ SCENARIO( "Graph adjacency matrix construction", "[dindex]" )
         }
 
         REQUIRE( nof_checked > 0 );
+      }
+    }
+
+    WHEN( "A block-diagonal range matrix is assembled from per-component Range blocks" )
+    {
+      typedef range_crsmatrix_t::ordinal_type ordinal_t;
+
+      // Reference: the whole-graph range adjacency.
+      auto expected = diverg::util::range_adjacency_matrix< range_crsmatrix_t >( graph );
+
+      // Assemble the same matrix from per-component Range blocks.
+      auto nrows = static_cast< ordinal_t >( gum::util::total_nof_loci( graph ) );
+      auto provider = [&graph]( auto partial ) {
+        typename graph_type::rank_type lower = 1;
+        auto node_count = graph.get_node_count();
+        while ( lower <= node_count ) {
+          auto upper = std::get< 0 >(
+              diverg::util::upper_node_rank_in_component( graph, lower ) );
+          auto block
+              = diverg::util::range_adjacency_matrix< range_crsmatrix_t >(
+                  graph, lower, upper );
+          auto soff = static_cast< ordinal_t >(
+              gum::util::id_to_charorder( graph, graph.rank_to_id( lower ) ) );
+          partial( block, soff, soff );
+          lower = upper;
+        }
+      };
+      range_crsmatrix_t actual( nrows, nrows, provider );
+
+      THEN( "It should be identical to the directly-built whole-graph range matrix" )
+      {
+        check_identical( actual, expected );
+      }
+    }
+
+    WHEN( "A block-diagonal range matrix is assembled from per-component Basic blocks" )
+    {
+      typedef diverg::CRSMatrix< diverg::crs_matrix::Dynamic, bool, uint32_t, uint64_t > basic_crsmatrix_t;
+      typedef range_crsmatrix_t::ordinal_type ordinal_t;
+
+      // Reference: the whole-graph range adjacency.
+      auto expected = diverg::util::range_adjacency_matrix< range_crsmatrix_t >( graph );
+
+      // Assemble from per-component *native* Basic blocks.
+      auto nrows = static_cast< ordinal_t >( gum::util::total_nof_loci( graph ) );
+      auto provider = [&graph]( auto partial ) {
+        typename graph_type::rank_type lower = 1;
+        auto node_count = graph.get_node_count();
+        while ( lower <= node_count ) {
+          auto upper = std::get< 0 >(
+              diverg::util::upper_node_rank_in_component( graph, lower ) );
+          auto a = diverg::util::adjacency_matrix< xcrsmatrix_t >( graph, lower, upper );
+          basic_crsmatrix_t block( a );  // KokkosSparse -> diverg Basic
+          auto soff = static_cast< ordinal_t >(
+              gum::util::id_to_charorder( graph, graph.rank_to_id( lower ) ) );
+          partial( block, soff, soff );
+          lower = upper;
+        }
+      };
+      range_crsmatrix_t actual( nrows, nrows, provider );
+
+      THEN( "It should be identical to the directly-built whole-graph range matrix" )
+      {
+        check_identical( actual, expected );
       }
     }
   }

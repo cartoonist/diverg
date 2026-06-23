@@ -21,6 +21,7 @@
 #include <cinttypes>
 #include <vector>
 #include <type_traits>
+#include <algorithm>
 
 #include <gum/basic_types.hpp>
 #include <gum/iterators.hpp>
@@ -33,6 +34,11 @@
 
 
 namespace diverg {
+  // Forward declaration so the meta-functions below can recognise a native matrix.
+  // NOTE: The definition, with default arguments, appears further down.
+  template< typename TSpec, typename TValue, typename TOrdinal, typename TSize >
+  class CRSMatrix;
+
   /* specialisation tags */
   namespace crs_matrix {
     // Group specialisation tags
@@ -76,6 +82,22 @@ namespace diverg {
     struct Group< RangeCompressed > {
       typedef RangeGroup type;
     };
+
+    // A native CRSMatrix is classified by its spec.
+    template< typename TSpec, typename ...TArgs >
+    struct Group< CRSMatrix< TSpec, TArgs... > > : Group< TSpec > { };
+
+    // True iff `T` is a native CRSMatrix (rather than e.g. `KokkosSparse::CrsMatrix`).
+    template< typename T >
+    struct is_native_crs_matrix : std::false_type { };
+
+    template< typename ...TArgs >
+    struct is_native_crs_matrix< CRSMatrix< TArgs... > > : std::true_type { };
+
+    // True iff `T` is a CRSMatrix in the Range group.
+    template< typename T >
+    struct is_range_crs_matrix
+      : std::is_same< typename Group< T >::type, RangeGroup > { };
 
     /* === Specialised helper functions === */
 
@@ -246,35 +268,85 @@ namespace diverg {
       }
     }
 
-    template< typename TEntries, typename TRowmap, typename TCrsMatrix, typename TOrdinal >
+    /**
+     *  @brief  Append a block whose group matches the destination (verbatim copy).
+     *
+     *  Used for the same-group cases (Basic into Basic, Range into Range): entries
+     *  are copied verbatim shifted by `scol`, so the row delimiters carry over.
+     *
+     *  NOTE: This function assumes that `rowmap` is an already allocated array of
+     *        length `numRows`+1 with `rowmap[0] == 0`.
+     */
+    template< typename TGroup,
+              typename TEntries,
+              typename TRowmap,
+              typename TFromEntriesIter,
+              typename TFromRowmapIter >
     inline void
-    fill_all_partial( TEntries& entries, TRowmap& rowmap, TCrsMatrix const& ex,
-                      TOrdinal scol=0, TOrdinal srow=0, BasicGroup={} /*tag*/ )
+    append( TEntries& entries,
+            TRowmap& rowmap,
+            TFromEntriesIter e_entries_begin,
+            TFromRowmapIter e_rowmap_begin,
+            TFromRowmapIter e_rowmap_end,
+            TGroup /*to*/,
+            TGroup /*from*/,
+            typename TEntries::value_type scol=0,
+            typename TEntries::value_type srow=0 )
     {
+      typedef typename TEntries::value_type ordinal_type;
       typedef typename TRowmap::value_type size_type;
 
       const size_type snnz = entries.size();
-      const size_type ent_size = ex.graph.entries.extent( 0 );
-      assert( ent_size == static_cast< size_type >( ex.nnz() ) );
+      // The last element of the source rowmap is the block's entry count.
+      const size_type ent_size = static_cast< size_type >( *( e_rowmap_end - 1 ) );
+      rowmap[ 0 ] = 0;
       diverg::resize( entries, snnz + ent_size );
-      auto ent_start = entries.begin() + snnz;
-      std::transform( ex.graph.entries.data(), ex.graph.entries.data() + ent_size,
-                      ent_start, [scol]( TOrdinal e ) { return e + scol; } );
-
-      auto rowmap_size = ex.graph.row_map.extent( 0 );
-      auto row_start = rowmap.begin() + srow + 1;
-      std::transform( ex.graph.row_map.data() + 1, ex.graph.row_map.data() + rowmap_size,
-                      row_start, [snnz]( size_type e ) { return e + snnz; } );
+      std::transform(
+          e_entries_begin, e_entries_begin + ent_size, entries.begin() + snnz,
+          [scol]( auto e ) { return static_cast< ordinal_type >( e ) + scol; } );
+      std::transform(
+          e_rowmap_begin + 1, e_rowmap_end, rowmap.begin() + srow + 1,
+          [snnz]( auto e ) { return static_cast< size_type >( e ) + snnz; } );
     }
 
-    template< typename TEntries, typename TRowmap, typename TCrsMatrix, typename TOrdinal >
+    /**
+     *  @brief  Fill a block of the destination matrix from a `CRSMatrix` source.
+     *
+     *  It works for any source group (Basic or Range) and any destination group.
+     */
+    template< typename TEntries, typename TRowmap, typename TExtCrsMatrix, typename TOrdinal,
+              typename TToGroup,
+              std::enable_if_t< is_native_crs_matrix< TExtCrsMatrix >::value, int > = 0 >
     inline void
-    fill_all_partial( TEntries& entries, TRowmap& rowmap, TCrsMatrix const& ex,
-                      TOrdinal scol=0, TOrdinal srow=0, RangeGroup={} /*tag*/ )
+    fill_all_partial( TEntries& entries, TRowmap& rowmap, TExtCrsMatrix const& ex,
+                      TOrdinal scol=0, TOrdinal srow=0, TToGroup to={} /*tag*/ )
+    {
+      typedef typename Group< TExtCrsMatrix >::type from_group;
+      auto e_view = ex.entries_view();
+      auto r_view = ex.rowmap_view();
+      append( entries, rowmap, e_view.data(), r_view.data(),
+              r_view.data() + r_view.extent( 0 ), to, from_group{}, scol, srow );
+    }
+
+    /**
+     *  @brief  Fill a block of the destination matrix from a non-native source
+     *
+     *  The non-native source matrix (e.g. `KokkosSparse::CrsMatrix`) is always
+     *  in the Basic group.
+     *
+     *  The block starts at row `srow` and column `scol`; `TToGroup` is the
+     *  destination's group.
+     */
+    template< typename TEntries, typename TRowmap, typename TExtCrsMatrix, typename TOrdinal,
+              typename TToGroup,
+              std::enable_if_t< !is_native_crs_matrix< TExtCrsMatrix >::value, int > = 0 >
+    inline void
+    fill_all_partial( TEntries& entries, TRowmap& rowmap, TExtCrsMatrix const& ex,
+                      TOrdinal scol = 0, TOrdinal srow = 0, TToGroup to = {} /*tag*/ )
     {
       auto rowmap_size = ex.graph.row_map.extent( 0 );
       append( entries, rowmap, ex.graph.entries.data(), ex.graph.row_map.data(),
-              ex.graph.row_map.data() + rowmap_size, RangeGroup{}, BasicGroup{}, scol, srow );
+              ex.graph.row_map.data() + rowmap_size, to, BasicGroup{}, scol, srow );
     }
   }  /* --- end of namespace crs_matrix --- */
 
