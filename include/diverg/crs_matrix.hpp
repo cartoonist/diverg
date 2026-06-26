@@ -353,10 +353,10 @@ namespace diverg {
                       TOrdinal scol=0, TOrdinal srow=0, TToGroup to={} /*tag*/ )
     {
       typedef typename Group< TExtCrsMatrix >::type from_group;
-      auto e_view = ex.entries_view();
-      auto r_view = ex.rowmap_view();
-      append( entries, rowmap, e_view.data(), r_view.data(),
-              r_view.data() + r_view.extent( 0 ), to, from_group{}, scol, srow );
+      auto const& e = ex.get_entries();
+      auto const& r = ex.get_rowmap();
+      append( entries, rowmap, e.data(), r.data(), r.data() + r.size(), to,
+              from_group{}, scol, srow );
     }
 
     /**
@@ -2014,6 +2014,32 @@ namespace diverg {
     rowMap( ordinal_type i )
     {
       return this->rowmap[ i ];
+    }
+
+    /**
+     *  @brief  Direct (read-only) access to the underlying `entries` array.
+     *
+     *  Unlike `entries_view`, this exposes the raw storage container without
+     *  wrapping it in a `Kokkos::View`, so it is available for every spec
+     *  (including buffered/compressed, which cannot provide a view).
+     */
+    inline entries_type const&
+    get_entries( ) const
+    {
+      return this->entries;
+    }
+
+    /**
+     *  @brief  Direct (read-only) access to the underlying `rowmap` array.
+     *
+     *  Unlike `rowmap_view`, this exposes the raw storage container without
+     *  wrapping it in a `Kokkos::View`, so it is available for every spec
+     *  (including buffered/compressed, which cannot provide a view).
+     */
+    inline rowmap_type const&
+    get_rowmap( ) const
+    {
+      return this->rowmap;
     }
 
     inline void
