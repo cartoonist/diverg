@@ -20,6 +20,7 @@
 
 #include <diverg/random.hpp>
 #include <diverg/crs_matrix.hpp>
+#include <diverg/dindex.hpp>
 #include <KokkosSparse_CrsMatrix.hpp>
 
 #include "test_base.hpp"
@@ -936,7 +937,7 @@ TEMPLATE_SCENARIO_SIG( "Merging two distance indices", "[crsmatrix][bool]",
       crsmat_type mat1( x_matrix1 );
       crsmat_type mat2( x_matrix2 );
       crsmat_type mmat;
-      mmat.assign( merge_distance_index< crsmat_mutable_type >( mat1, mat2 ) );
+      mmat.assign( util::merge_distance_index< crsmat_mutable_type >( mat1, mat2 ) );
 
       THEN( "The resulting merged matrix should be a zero matrix" )
       {
@@ -967,7 +968,7 @@ TEMPLATE_SCENARIO_SIG( "Merging two distance indices", "[crsmatrix][bool]",
 
     WHEN( "The random matrix is merged with the zero one" )
     {
-      mmat.assign( merge_distance_index< crsmat_mutable_type >( matn, matz ) );
+      mmat.assign( util::merge_distance_index< crsmat_mutable_type >( matn, matz ) );
 
       THEN( "The merged matrix should be identical to the non-zero one" )
       {
@@ -979,7 +980,7 @@ TEMPLATE_SCENARIO_SIG( "Merging two distance indices", "[crsmatrix][bool]",
 
     WHEN( "They the zero matrix is merged with the random one" )
     {
-      mmat.assign( merge_distance_index< crsmat_mutable_type >( matz, matn ) );
+      mmat.assign( util::merge_distance_index< crsmat_mutable_type >( matz, matn ) );
 
       THEN( "The merged matrix should be identical to the non-zero one" )
       {
@@ -1019,7 +1020,7 @@ TEMPLATE_SCENARIO_SIG( "Merging two distance indices", "[crsmatrix][bool]",
       crsmat_type mat1( x_matrix1 );
       crsmat_type mat2( x_matrix2 );
       crsmat_type mmat;
-      mmat.assign( merge_distance_index< crsmat_mutable_type >( mat1, mat2 ) );
+      mmat.assign( util::merge_distance_index< crsmat_mutable_type >( mat1, mat2 ) );
 
       THEN( "It should be true whereever either of matrices are true" )
       {
@@ -1053,7 +1054,7 @@ TEMPLATE_SCENARIO_SIG( "Merging two distance indices", "[crsmatrix][bool]",
       crsmat_type mat1( x_matrix1 );
       crsmat_type mat2( x_matrix2 );
       crsmat_type mmat;
-      mmat.assign( merge_distance_index< crsmat_mutable_type >( mat1, mat2 ) );
+      mmat.assign( util::merge_distance_index< crsmat_mutable_type >( mat1, mat2 ) );
 
       THEN( "It should yeild an all-ones matrix" )
       {
@@ -1149,7 +1150,7 @@ TEMPLATE_SCENARIO_SIG( "Merging two distance index with large dimensions", "[crs
     WHEN( "They got merged" )
     {
       crsmat_type mmat;
-      mmat.assign( merge_distance_index< crsmat_mutable_type >( mat1, mat2 ) );
+      mmat.assign( util::merge_distance_index< crsmat_mutable_type >( mat1, mat2 ) );
 
       THEN( "It should be true whereever either of matrices are true" )
       {
