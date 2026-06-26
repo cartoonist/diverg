@@ -312,11 +312,15 @@ namespace diverg {
     }
 
     /**
-     *  @brief  Merge two distance indices (Range Group)
+     *  @brief  Merge two distance indices (Range Group, out-of-core operands)
      *
      *  @param  dindex1 first distance index
      *  @param  dindex2 second distance index
      *  @return a mutable merged distance index of type `TMutableCRSMatrix`
+     *
+     *  Host-sequential streaming merge used when an input or the output is
+     *  buffered (out-of-core), where `range_spadd` (which requires full
+     *  residency) cannot be applied.
      *
      *  NOTE: The resulting mutable matrix can be assigned to a immutable compressed
      *        matrix afterwards.
@@ -327,7 +331,8 @@ namespace diverg {
     template< typename TMutableCRSMatrix, typename TCRSMatrix >
     inline TMutableCRSMatrix
     merge_distance_index( TCRSMatrix& dindex1, TCRSMatrix& dindex2,
-                          crs_matrix::RangeGroup /* tag */ )
+                          crs_matrix::RangeGroup /* group tag */,
+                          std::true_type /* is_buffered */ )
     {
       typedef TMutableCRSMatrix crsmat_mutable_type;
       typedef TCRSMatrix crsmat_type;
@@ -453,6 +458,66 @@ namespace diverg {
       rowmap.push_back( entries.size() );
 
       return crsmat_mutable_type( nof_cols, std::move( entries ), std::move( rowmap ), c_nnz );
+    }
+
+    /**
+     *  @brief  Merge two distance indices (Range Group, in-core operands)
+     *
+     *  @param  dindex1 first distance index
+     *  @param  dindex2 second distance index
+     *  @return a mutable merged distance index of type `TMutableCRSMatrix`
+     *
+     *  Merging two Boolean distance indices is exactly their addition `A + B`
+     *  (union of nonzero values), which for the Range group is computed by
+     *  `range_spadd`. Since `range_spadd` requires operands and result to be in
+     *  (device) memory, this overload is selected only when neither input nor
+     *  output is buffered (out-of-core).
+     */
+    template< typename TMutableCRSMatrix, typename TCRSMatrix >
+    inline TMutableCRSMatrix
+    merge_distance_index( TCRSMatrix& dindex1, TCRSMatrix& dindex2,
+                          crs_matrix::RangeGroup /* group tag */,
+                          std::false_type /* is_buffered */ )
+    {
+      using execution_space = Kokkos::DefaultExecutionSpace;
+      execution_space space;
+
+      auto a_entries = dindex1.entries_device_view( space );
+      auto a_rowmap = dindex1.rowmap_device_view( space );
+      auto b_entries = dindex2.entries_device_view( space );
+      auto b_rowmap = dindex2.rowmap_device_view( space );
+      auto c_entries = TMutableCRSMatrix::make_entries_device_view( space );
+      auto c_rowmap = TMutableCRSMatrix::make_rowmap_device_view( space );
+
+      SparseRangeHandle handle( dindex1, dindex2, space );
+      range_spadd( handle, a_rowmap, a_entries, b_rowmap, b_entries, c_rowmap,
+                   c_entries );
+
+      auto c_nnz = crs_matrix::nnz( c_entries, c_rowmap, crs_matrix::RangeGroup{} );
+      return TMutableCRSMatrix( dindex1.numCols(), c_entries, c_rowmap, c_nnz );
+    }
+
+    /**
+     *  @brief  Merge two distance indices (Range Group)
+     *
+     *  @param  dindex1 first distance index
+     *  @param  dindex2 second distance index
+     *  @return a mutable merged distance index of type `TMutableCRSMatrix`
+     *
+     *  Selects the merge strategy by operand residency: `range_spadd` for in-core
+     *  operands, or the host-sequential streaming merge when an input or the
+     *  output is buffered (out-of-core).
+     */
+    template< typename TMutableCRSMatrix, typename TCRSMatrix >
+    inline TMutableCRSMatrix
+    merge_distance_index( TCRSMatrix& dindex1, TCRSMatrix& dindex2,
+                          crs_matrix::RangeGroup /* tag */ )
+    {
+      using buffered = std::integral_constant< bool,
+          crs_matrix::is_buffered< TCRSMatrix >::value ||
+          crs_matrix::is_buffered< TMutableCRSMatrix >::value >;
+      return merge_distance_index< TMutableCRSMatrix >(
+          dindex1, dindex2, crs_matrix::RangeGroup{}, buffered{} );
     }
 
     /**

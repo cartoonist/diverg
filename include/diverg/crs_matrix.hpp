@@ -110,6 +110,21 @@ namespace diverg {
     template< typename... >
     struct always_false : std::false_type { };
 
+    // True iff the spec (or matrix) is buffered; i.e. its `entries`/`rowmap`
+    // arrays are backed by a disk file and accessed by streaming (out-of-core),
+    // rather than being fully resident in memory (in-core).
+    template< typename TSpec >
+    struct is_buffered : std::false_type { };
+
+    template< > struct is_buffered< Buffered > : std::true_type { };
+    template< > struct is_buffered< FullyBuffered > : std::true_type { };
+    template< > struct is_buffered< RangeBuffered > : std::true_type { };
+    template< > struct is_buffered< RangeFullyBuffered > : std::true_type { };
+
+    // A native CRSMatrix is classified by its spec.
+    template< typename TSpec, typename ...TArgs >
+    struct is_buffered< CRSMatrix< TSpec, TArgs... > > : is_buffered< TSpec > { };
+
     /* === Specialised helper functions === */
 
     template< typename TIter, typename TOrdinal >
