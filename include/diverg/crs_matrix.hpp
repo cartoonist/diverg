@@ -115,6 +115,21 @@ namespace diverg {
     template< typename... >
     struct always_false : std::false_type { };
 
+    // True iff the spec (or matrix) is dynamic; i.e. mutable -- its
+    // `entries`/`rowmap` can still be modified after construction.
+    template< typename TSpec >
+    struct is_dynamic : std::false_type { };
+
+    template< > struct is_dynamic< Dynamic > : std::true_type { };
+    template< > struct is_dynamic< Buffered > : std::true_type { };
+    template< > struct is_dynamic< FullyBuffered > : std::true_type { };
+    template< > struct is_dynamic< RangeDynamic > : std::true_type { };
+    template< > struct is_dynamic< RangeBuffered > : std::true_type { };
+    template< > struct is_dynamic< RangeFullyBuffered > : std::true_type { };
+
+    template< typename TSpec, typename ...TArgs >
+    struct is_dynamic< CRSMatrix< TSpec, TArgs... > > : is_dynamic< TSpec > { };
+
     // True iff the spec (or matrix) is buffered; i.e. its `entries`/`rowmap`
     // arrays are backed by a disk file and accessed by streaming (out-of-core),
     // rather than being fully resident in memory (in-core).

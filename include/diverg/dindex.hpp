@@ -351,9 +351,10 @@ namespace diverg {
      *  @param  dindex2 second distance index
      *  @return a mutable merged distance index of type `TMutableCRSMatrix`
      *
-     *  Host-sequential streaming merge used when an input or the output is
-     *  buffered (out-of-core), where `range_spadd` (which requires full
-     *  residency) cannot be applied.
+     *  Host-sequential streaming merge used when an input or the output cannot
+     *  be exposed as a view; particularly when it is buffered (out-of-core) or
+     *  compressed since `range_spadd` (which operates on in-memory views)
+     *  cannot be applied.
      *
      *  NOTE: The resulting mutable matrix can be assigned to a immutable compressed
      *        matrix afterwards.
@@ -365,7 +366,7 @@ namespace diverg {
     inline TMutableCRSMatrix
     merge_distance_index( TCRSMatrix& dindex1, TCRSMatrix& dindex2,
                           crs_matrix::RangeGroup /* group tag */,
-                          std::true_type /* is_buffered */ )
+                          std::true_type /* needs_streaming */ )
     {
       typedef TMutableCRSMatrix crsmat_mutable_type;
       typedef TCRSMatrix crsmat_type;
@@ -503,18 +504,17 @@ namespace diverg {
      *  Merging two Boolean distance indices is exactly their addition `A + B`
      *  (union of nonzero values), which for the Range group is computed by
      *  `range_spadd`. Since `range_spadd` requires operands and result to be in
-     *  (device) memory, this overload is selected only when neither input nor
-     *  output is buffered (out-of-core).
+     *  (device) memory, this overload is selected only when every input and the
+     *  output is viewable -- i.e. none is buffered (out-of-core) or compressed.
      */
-    template< typename TMutableCRSMatrix, typename TCRSMatrix >
+    template< typename TMutableCRSMatrix, typename TCRSMatrix,
+              typename TExecSpace = Kokkos::DefaultExecutionSpace >
     inline TMutableCRSMatrix
     merge_distance_index( TCRSMatrix& dindex1, TCRSMatrix& dindex2,
                           crs_matrix::RangeGroup /* group tag */,
-                          std::false_type /* is_buffered */ )
+                          std::false_type /* needs_streaming */,
+                          TExecSpace space = {} )
     {
-      using execution_space = Kokkos::DefaultExecutionSpace;
-      execution_space space;
-
       auto a_entries = dindex1.entries_device_view( space );
       auto a_rowmap = dindex1.rowmap_device_view( space );
       auto b_entries = dindex2.entries_device_view( space );
@@ -537,20 +537,32 @@ namespace diverg {
      *  @param  dindex2 second distance index
      *  @return a mutable merged distance index of type `TMutableCRSMatrix`
      *
-     *  Selects the merge strategy by operand residency: `range_spadd` for in-core
-     *  operands, or the host-sequential streaming merge when an input or the
-     *  output is buffered (out-of-core).
+     *  Selects the merge strategy by operand specialisation: `range_spadd` can
+     *  only operate on matrices whose entries and row map arrays can be exposed
+     *  as a contiguous, in-memory arrays with fixed-sized element to be fit as
+     *  unmanaged `Kokkos::View`. Buffered (out-of-core) and compressed matrices
+     *  cannot provide such views, so any of them forces the streaming merge.
      */
-    template< typename TMutableCRSMatrix, typename TCRSMatrix >
+    template< typename TMutableCRSMatrix, typename TCRSMatrix,
+              typename TExecSpace = Kokkos::DefaultExecutionSpace >
     inline TMutableCRSMatrix
     merge_distance_index( TCRSMatrix& dindex1, TCRSMatrix& dindex2,
-                          crs_matrix::RangeGroup /* tag */ )
+                          crs_matrix::RangeGroup /* tag */,
+                          TExecSpace space = {} )
     {
-      using buffered = std::integral_constant< bool,
+      using needs_streaming = std::integral_constant< bool,
           crs_matrix::is_buffered< TCRSMatrix >::value ||
+          !crs_matrix::is_dynamic< TCRSMatrix >::value ||
           crs_matrix::is_buffered< TMutableCRSMatrix >::value >;
-      return merge_distance_index< TMutableCRSMatrix >(
-          dindex1, dindex2, crs_matrix::RangeGroup{}, buffered{} );
+      if constexpr ( needs_streaming{} ) {
+        return merge_distance_index< TMutableCRSMatrix >(
+            dindex1, dindex2, crs_matrix::RangeGroup{}, needs_streaming{} );
+      }
+      else {
+        return merge_distance_index< TMutableCRSMatrix >(
+            dindex1, dindex2, crs_matrix::RangeGroup{}, needs_streaming{},
+            space );
+      }
     }
 
     /**
@@ -624,6 +636,9 @@ namespace diverg {
         crs_matrix::is_same_group< typename TMutableCRSMatrix::spec_type,
                                    typename TCRSMatrix::spec_type >::value,
         "input and output distance indices must be in the same group" );
+      static_assert(
+        crs_matrix::is_dynamic< TMutableCRSMatrix >::value,
+        "merge output must be a dynamic (mutable) matrix" );
       return merge_distance_index< TMutableCRSMatrix >(
         dindex1, dindex2, typename crs_matrix::Group< typename TCRSMatrix::spec_type >::type{} );
     }
@@ -727,6 +742,10 @@ namespace diverg {
         crs_matrix::is_same_group< typename TMutableCRSMatrix::spec_type,
                                    typename TCRSMatrix::spec_type >::value,
         "input and output distance indices must be in the same group" );
+      static_assert(
+        crs_matrix::is_dynamic< TMutableCRSMatrix >::value,
+        "compress output must be a dynamic (mutable) matrix; assign the "
+        "compressed result to a compressed matrix afterwards if needed" );
       return compress_distance_index< TMutableCRSMatrix >(
         dindex, graph,
         typename crs_matrix::Group< typename TCRSMatrix::spec_type >::type{} );
