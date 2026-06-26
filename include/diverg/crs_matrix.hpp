@@ -99,6 +99,17 @@ namespace diverg {
     struct is_range_crs_matrix
       : std::is_same< typename Group< T >::type, RangeGroup > { };
 
+    // True iff two matrices `T` and `U` belong to the same group.
+    template< typename T, typename U >
+    struct is_same_group
+      : std::is_same< typename Group< T >::type, typename Group< U >::type > { };
+
+    // A `value`-less trait that is always `false` but stays dependent on its
+    // template parameters, so it only triggers `static_assert` upon
+    // instantiation (e.g. for not-yet-implemented tag overloads).
+    template< typename... >
+    struct always_false : std::false_type { };
+
     /* === Specialised helper functions === */
 
     template< typename TIter, typename TOrdinal >
@@ -3518,6 +3529,10 @@ namespace diverg {
   inline TMutableCRSMatrix
   merge_distance_index( TCRSMatrix& dindex1, TCRSMatrix& dindex2 )
   {
+    static_assert(
+      crs_matrix::is_same_group< typename TMutableCRSMatrix::spec_type,
+                                 typename TCRSMatrix::spec_type >::value,
+      "input and output distance indices must be in the same group" );
     return merge_distance_index< TMutableCRSMatrix >(
       dindex1, dindex2, typename crs_matrix::Group< typename TCRSMatrix::spec_type >::type{} );
   }

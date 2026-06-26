@@ -312,7 +312,7 @@ namespace diverg {
     }
 
     /**
-     *  @brief  Compress a distance index by removing intra-node loci pairs
+     *  @brief  Compress a distance index by removing intra-node loci pairs (Basic Group)
      *
      *  @param  dindex input distance index
      *  @param  graph underlying graph
@@ -328,7 +328,8 @@ namespace diverg {
               typename TCRSMatrix,
               typename TGraph >
     inline TMutableCRSMatrix
-    compress_distance_index( TCRSMatrix& dindex, TGraph const& graph )
+    compress_distance_index( TCRSMatrix& dindex, TGraph const& graph,
+                             crs_matrix::BasicGroup /* tag */ )
     {
       typedef TGraph graph_type;
       typedef typename graph_type::rank_type rank_type;
@@ -363,6 +364,55 @@ namespace diverg {
       assert( start == dindex.nnz() );
 
       return crsmat_mutable_type( dindex.numCols(), std::move( entries ), std::move( rowmap ) );
+    }
+
+    /**
+     *  @brief  Compress a distance index by removing intra-node loci pairs (Range Group)
+     *
+     *  NOTE: Not implemented. Actually, it might not even make sense to
+     *  implement this for the Range group, since the compression gain is likely
+     *  to be negligible.
+     */
+    template< typename TMutableCRSMatrix,
+              typename TCRSMatrix,
+              typename TGraph >
+    inline TMutableCRSMatrix
+    compress_distance_index( TCRSMatrix& /* dindex */, TGraph const& /* graph */,
+                             crs_matrix::RangeGroup /* tag */ )
+    {
+      static_assert( crs_matrix::always_false< TCRSMatrix >::value,
+                     "compress_distance_index is not implemented for the Range group" );
+    }
+
+    /**
+     *  @brief  Compress a distance index by removing intra-node loci pairs
+     *
+     *  @param  dindex input distance index
+     *  @param  graph underlying graph
+     *  @return a mutable compressed distance index of type `TMutableCRSMatrix`
+     *
+     *  Dispatches to the group-specific implementation inferred from the input
+     *  matrix. The output mutable matrix must be in the same group as the input.
+     *
+     *  NOTE: The resulting mutable matrix can be assigned to a immutable compressed
+     *        matrix afterwards.
+     *
+     *  NOTE: The input uncompressed distance index is passed by non-const reference,
+     *        since containers in const Buffered specialisations cannot be iterated.
+     */
+    template< typename TMutableCRSMatrix,
+              typename TCRSMatrix,
+              typename TGraph >
+    inline TMutableCRSMatrix
+    compress_distance_index( TCRSMatrix& dindex, TGraph const& graph )
+    {
+      static_assert(
+        crs_matrix::is_same_group< typename TMutableCRSMatrix::spec_type,
+                                   typename TCRSMatrix::spec_type >::value,
+        "input and output distance indices must be in the same group" );
+      return compress_distance_index< TMutableCRSMatrix >(
+        dindex, graph,
+        typename crs_matrix::Group< typename TCRSMatrix::spec_type >::type{} );
     }
 
     /**
