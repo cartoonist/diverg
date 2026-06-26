@@ -152,21 +152,25 @@ namespace diverg {
     }
 
     /**
-     *  @brief  Get the adjacency matrix of the graph in CRS format.
+     *  @brief  Get the adjacency matrix of the graph as a non-native CRS matrix.
      *
      *  @param[in]  graph The graph.
      *  @param[in]  lower  The lower node rank (inclusive).
      *  @param[in]  upper  The upper node rank (exclusive).
-     *  @return  The adjacency matrix in KokkosSparse::CrsMatrix format.
+     *  @return  The adjacency matrix as a `KokkosSparse::CrsMatrix`-like matrix.
      *
      *  Compute adjacency matrix of a component in the given `graph` or of the whole
      *  graph. The component is indicated by nodes whose ranks are in the range [lower,
      *  upper). The resulting adjacency matrix is stored in CRS format.
      *
+     *  This overload targets non-native output types (e.g. `KokkosSparse::CrsMatrix`);
+     *  see the native overload for `CRSMatrix` types.
+     *
      *  NOTE: This function assumes the range [lower, upper) exclusively covers
      *  all nodes in the component.
      */
-    template< typename TCrsMatrix, class TGraph >
+    template< typename TCrsMatrix, class TGraph,
+              std::enable_if_t< !crs_matrix::is_native_crs_matrix< TCrsMatrix >::value, int > = 0 >
     inline TCrsMatrix
     adjacency_matrix( TGraph const& graph,
                       typename TGraph::rank_type lower=1,
@@ -229,18 +233,95 @@ namespace diverg {
     }
 
     /**
-     *  @brief  Get the adjacency matrix of the graph directly in Range CRS format.
+     *  @brief  Get the adjacency matrix of the graph as a native Basic CRS matrix.
+     *
+     *  @param[in]  graph The graph.
+     *  @param[in]  lower  The lower node rank (inclusive).
+     *  @param[in]  upper  The upper node rank (exclusive).
+     *  @return  The adjacency matrix as a native Basic `TCRSMatrix`.
+     *
+     *  Overload of `adjacency_matrix` for native `CRSMatrix` types. It builds
+     *  the matrix for the subgraph defined by the node rank range [lower,
+     *  upper). It uses Kokkos core only, decoupling from KokkosKernels.
+     *
+     *  NOTE: This function assumes the range [lower, upper) exclusively covers
+     *  all nodes in the component.
+     */
+    template< typename TCRSMatrix, class TGraph,
+              std::enable_if_t<
+                  crs_matrix::is_native_crs_matrix< TCRSMatrix >::value, int > = 0 >
+    inline TCRSMatrix
+    adjacency_matrix( TGraph const& graph,
+                      typename TGraph::rank_type lower=1,
+                      typename TGraph::rank_type upper=0 )
+    {
+      typedef TGraph graph_type;
+      typedef typename graph_type::id_type id_type;
+      typedef typename graph_type::offset_type offset_type;
+      typedef typename graph_type::rank_type rank_type;
+      typedef typename graph_type::linktype_type linktype_type;
+
+      typedef TCRSMatrix crsmat_type;
+      typedef typename crsmat_type::ordinal_type ordinal_type;
+      typedef typename crsmat_type::size_type size_type;
+
+      static_assert( crs_matrix::is_basic_crs_matrix< crsmat_type >::value,
+                     "output matrix should be in Basic CRS format." );
+
+      if ( upper == 0 ) upper = graph.get_node_count() + 1;
+      ordinal_type nrows = gum::util::total_nof_loci( graph, lower, upper );
+      size_type nnz = nrows - _node_count( graph, lower, upper ) +
+          _edge_count( graph, lower, upper );
+
+      auto entries = crsmat_type::make_entries( nnz );
+      auto rowmap = crsmat_type::make_rowmap( nrows + 1 );
+
+      offset_type cursor = 0;
+      offset_type start = gum::util::id_to_charorder( graph, graph.rank_to_id( lower ) );
+      size_type i = 0;
+      size_type irow = 0;
+      rowmap[ irow++ ] = i;
+      graph.for_each_node(
+          [&]( rank_type rank, id_type id ) {
+            for ( offset_type offset = 1; offset < graph.node_length( id ); ++offset ) {
+              entries[ i++ ] = ++cursor;
+              rowmap[ irow++ ] = i;
+            }
+            ++cursor;
+            auto row_begin = i;
+            graph.for_each_edges_out(
+                id,
+                [&graph, &entries, &i, start]( id_type to, linktype_type ) {
+                  entries[ i++ ] = gum::util::id_to_charorder( graph, to ) - start;
+                  return true;
+                } );
+            std::sort( entries.data() + row_begin, entries.data() + i );
+            rowmap[ irow++ ] = i;
+            if ( rank + 1 == upper ) return false;
+            return true;
+          },
+          lower );
+      assert( i == nnz );
+      assert( irow == static_cast< size_type >( nrows + 1 ) );
+
+      return crsmat_type( nrows, std::move( entries ), std::move( rowmap ) );
+    }
+
+    /**
+     *  @brief  Get the adjacency matrix of the graph in Range CRS format.
      *
      *  @param[in]  graph  The graph.
      *  @param[in]  lower  The lower node rank (inclusive).
      *  @param[in]  upper  The upper node rank (exclusive).
      *  @return  The adjacency matrix as a Range CRS matrix (`TRangeCRSMatrix`).
      *
-     *  Like `adjacency_matrix`, but builds the matrix directly in diverg's
-     *  Range CRS format using only Kokkos core. It does not go through a
-     *  `KokkosSparse::CrsMatrix` and therefore does not require KokkosKernels.
-     *  The resulting matrix is local (0-based) and square with order equal to
-     *  the number of loci in the node rank range [lower, upper).
+     *  Like `adjacency_matrix`, but yields the result in Range CRS format using
+     *  only Kokkos core; it does not go through a `KokkosSparse::CrsMatrix` and
+     *  therefore does not require KokkosKernels.
+     *
+     *  It builds the adjacency in the corresponding native Basic format (via the
+     *  native `adjacency_matrix` overload) and converts it to Range format by
+     *  assignment, which performs the basic-to-range conversion internally.
      *
      *  NOTE: This function assumes the range [lower, upper) exclusively covers all
      *  nodes in the component(s).
@@ -251,64 +332,16 @@ namespace diverg {
                             typename TGraph::rank_type lower=1,
                             typename TGraph::rank_type upper=0 )
     {
-      typedef TGraph graph_type;
-      typedef typename graph_type::id_type id_type;
-      typedef typename graph_type::offset_type offset_type;
-      typedef typename graph_type::rank_type rank_type;
-      typedef typename graph_type::linktype_type linktype_type;
-
       typedef TRangeCRSMatrix crsmat_type;
-      typedef typename crsmat_type::ordinal_type ordinal_type;
-      typedef typename crsmat_type::size_type size_type;
 
       static_assert( crs_matrix::is_range_crs_matrix< crsmat_type >::value,
                      "output matrix should be in Range CRS format." );
 
-      if ( upper == 0 ) upper = graph.get_node_count() + 1;
-      ordinal_type nrows = gum::util::total_nof_loci( graph, lower, upper );
-      size_type nnz = nrows - _node_count( graph, lower, upper ) +
-          _edge_count( graph, lower, upper );
+      typedef diverg::make_basic_t< crsmat_type > basic_crsmat_type;
 
-      /* Build a basic CRS adjacency (sorted column indices per row) on host. */
-      std::vector< ordinal_type > b_entries( nnz );
-      std::vector< size_type > b_rowmap( nrows + 1 );
-
-      offset_type cursor = 0;
-      offset_type start = gum::util::id_to_charorder( graph, graph.rank_to_id( lower ) );
-      size_type i = 0;
-      size_type irow = 0;
-      b_rowmap[ irow++ ] = i;
-      graph.for_each_node(
-          [&]( rank_type rank, id_type id ) {
-            for ( offset_type offset = 1; offset < graph.node_length( id ); ++offset ) {
-              b_entries[ i++ ] = ++cursor;
-              b_rowmap[ irow++ ] = i;
-            }
-            ++cursor;
-            auto entries_begin = b_entries.data() + i;
-            graph.for_each_edges_out(
-                id,
-                [&graph, &b_entries, &i, start]( id_type to, linktype_type ) {
-                  b_entries[ i++ ] = gum::util::id_to_charorder( graph, to ) - start;
-                  return true;
-                } );
-            std::sort( entries_begin, b_entries.data() + i );
-            b_rowmap[ irow++ ] = i;
-            if ( rank + 1 == upper ) return false;
-            return true;
-          },
-          lower );
-      assert( i == nnz );
-      assert( irow == static_cast< size_type >( nrows + 1 ) );
-
-      /* Convert the basic CRS adjacency to Range CRS format. */
-      auto r_entries = crsmat_type::make_entries();
-      auto r_rowmap = crsmat_type::make_rowmap( nrows + 1 );
-      crs_matrix::append( r_entries, r_rowmap, b_entries.data(), b_rowmap.data(),
-                          b_rowmap.data() + b_rowmap.size(), crs_matrix::RangeGroup{},
-                          crs_matrix::BasicGroup{} );
-
-      return crsmat_type( nrows, std::move( r_entries ), std::move( r_rowmap ), nnz );
+      crsmat_type matrix;
+      matrix.assign( adjacency_matrix< basic_crsmat_type >( graph, lower, upper ) );
+      return matrix;
     }
 
     /**

@@ -99,6 +99,11 @@ namespace diverg {
     struct is_range_crs_matrix
       : std::is_same< typename Group< T >::type, RangeGroup > { };
 
+    // True iff `T` is a CRSMatrix in the Basic group.
+    template< typename T >
+    struct is_basic_crs_matrix
+      : std::is_same< typename Group< T >::type, BasicGroup > { };
+
     // True iff two matrices `T` and `U` belong to the same group.
     template< typename T, typename U >
     struct is_same_group
