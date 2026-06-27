@@ -430,9 +430,10 @@ namespace diverg {
 
   /* === ETI wrapper class for range_spadd === */
   template< typename TRCRSMatrix, typename TExecSpace >
-  struct RangeSpAdd {
-    static TRCRSMatrix spadd( TRCRSMatrix const& a, TRCRSMatrix const& b,
-                              TExecSpace space );
+  class RangeSpAdd {
+    public:
+      static TRCRSMatrix spadd( TRCRSMatrix const& a, TRCRSMatrix const& b,
+                                TExecSpace space );
   };
 
   template< typename TRCRSMatrix, typename TExecSpace >
@@ -2282,9 +2283,10 @@ namespace diverg {
 
   // === ETI wrapper class for range_spgemm ===
   template< typename TRCRSMatrix, typename TSparseConfig >
-  struct RangeSpGEMM {
-    static TRCRSMatrix spgemm( TRCRSMatrix const& a, TRCRSMatrix const& b,
-                                TSparseConfig config );
+  class RangeSpGEMM {
+    public:
+      static TRCRSMatrix spgemm( TRCRSMatrix const& a, TRCRSMatrix const& b,
+                                  TSparseConfig config );
   };
 
   template< typename TRCRSMatrix, typename TSparseConfig >
@@ -2332,9 +2334,10 @@ namespace diverg {
 
   // === ETI wrapper class for range_power ===
   template< typename TRCRSMatrix, typename TSparseConfig >
-  struct RangePower {
-    static TRCRSMatrix power( TRCRSMatrix const& a, unsigned int k,
-                               TSparseConfig config );
+  class RangePower {
+    public:
+      static TRCRSMatrix power( TRCRSMatrix const& a, unsigned int k,
+                                 TSparseConfig config );
   };
 
   template< typename TRCRSMatrix, typename TSparseConfig >
