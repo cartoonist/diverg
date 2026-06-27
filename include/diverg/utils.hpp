@@ -36,7 +36,7 @@
 #define DIVERG_DEFAULT_TMPDIR "/tmp"
 #define DIVERG_TMPFILE_TEMPLATE "/diverg-XXXXXX"
 
-#define BINARY_NAME "diverg"
+#define DIVERG_BINARY_NAME "diverg"
 
 #ifdef __ASSERT_VOID_CAST
 #define DIVERG_ASSERT_VOID_CAST __ASSERT_VOID_CAST
@@ -47,7 +47,7 @@
 #define DIVERG_ASSERT(expr)							\
   ((expr)								\
    ? DIVERG_ASSERT_VOID_CAST (0)						\
-   : diverg::assert_fail (#expr, BINARY_NAME, __FILE__, __LINE__, __PRETTY_FUNCTION__))
+   : diverg::assert_fail (#expr, DIVERG_BINARY_NAME, __FILE__, __LINE__, __PRETTY_FUNCTION__))
 
 #define DIVERG_MACRO_MIN(x, y) ((x) < (y) ? (x) : (y))
 #define DIVERG_MACRO_MAX(x, y) ((x) < (y) ? (y) : (x))
