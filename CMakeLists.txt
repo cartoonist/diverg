@@ -141,7 +141,8 @@ if(DIVERG_ETI)
   set(DIVERG_ETI_SOURCES
     src/eti/hbitvector.cpp
     src/eti/crs_matrix.cpp
-    src/eti/range_sparse.cpp)
+    src/eti/range_sparse.cpp
+    src/eti/runtime.cpp)
   if(DIVERG_ENABLE_CUDA)
     list(APPEND DIVERG_ETI_SOURCES
       src/eti/hbitvector_cuda.cpp
