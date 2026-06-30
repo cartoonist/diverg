@@ -531,40 +531,33 @@ namespace diverg {
        *
        *   @param x Input bitset value
        *   @param i Argument i must be in the range [1..cnt(x)].
+       *
+       *   Keep CUDA `__fns` intrinsic inside the on-device branch, otherwise,
+       *   when CUDA is enabled, nvcc would reject it in the host pass of this
+       *   `__host__ __device__` which still compiles for host execution spaces.
        */
       static KOKKOS_INLINE_FUNCTION size_type
       sel( bitset_type x, size_type i )
       {
-        KOKKOS_IF_ON_DEVICE( ( return HBitVector::sel_device( x, i ); ) )
+#if defined( KOKKOS_ENABLE_CUDA )
+        KOKKOS_IF_ON_DEVICE( (
+          if constexpr ( BITSET_WIDTH == 64 ) {
+            uint32_t lsw = x & 0xffffffff;
+            auto cnt_lsw = HBitVector::cnt( lsw );
+            if ( i <= cnt_lsw ) return __fns( lsw, 0, i );
+            else {
+              uint32_t msw = ( x >> 32 ) & 0xffffffff;
+              return __fns( msw, 0, i - cnt_lsw );
+            }
+          }
+          else {
+            return __fns( x, 0, i );
+          }
+          DIVERG_BUILTIN_UNREACHABLE();
+        ) )
+#endif
         KOKKOS_IF_ON_HOST( ( return diverg::bits::sel( x, i ); ) )
       }
-
-#if defined( KOKKOS_ENABLE_CUDA )
-      /**
-       *   @brief Calculate the position of the i-th rightmost 1 bit in `x`
-       *          (on CUDA)
-       *
-       *   @param x Input bitset value
-       *   @param i Argument i must be in the range [1..cnt(x)].
-       */
-      static KOKKOS_INLINE_FUNCTION size_type
-      sel_device( bitset_type x, size_type i )
-      {
-        if constexpr ( BITSET_WIDTH == 64 ) {
-          uint32_t lsw = x & 0xffffffff;
-          auto cnt_lsw = HBitVector::cnt( lsw );
-          if ( i <= cnt_lsw ) return __fns( lsw, 0, i );
-          else {
-            uint32_t msw = ( x >> 32 ) & 0xffffffff;
-            return __fns( msw, 0, i - cnt_lsw );
-          }
-        }
-        else {
-          return __fns( x, 0, i );
-        }
-        DIVERG_BUILTIN_UNREACHABLE();
-      }
-#endif
 
       static KOKKOS_INLINE_FUNCTION bitset_type
       msb( bitset_type x ) noexcept
