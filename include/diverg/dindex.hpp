@@ -908,7 +908,7 @@ namespace diverg {
       } // free: rA^dlo and (rA + rI)^(dup - dlo)
       return TRCRSMatrix( ncols, d_entries, d_rowmap, d_nnz );
     }
-  } // namespace util
-} // namespace diverg
+  }  /* --- end of namespace util --- */
+}  /* --- end of namespace diverg --- */
 
-#endif // DIVERG_DINDEX_HPP__
+#endif  /* --- #ifndef DIVERG_DINDEX_HPP__ --- */
