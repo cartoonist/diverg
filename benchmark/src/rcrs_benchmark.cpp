@@ -763,7 +763,7 @@ benchmark_dindex( Options< TOrdinal, TSize > opts )
     execution_space space;
     std::cout << "Execution space: Host" << std::endl;
     std::cout << "Execution space concurrency: "
-              << execution_space::concurrency() << std::endl;
+              << space.concurrency() << std::endl;
     space.print_configuration( std::cout, opts.verbose );
     benchmark_dindex< TOrdinal, TSize, TScalar, TAcc >( opts, space );
   }
@@ -783,7 +783,7 @@ benchmark_dindex( Options< TOrdinal, TSize > opts )
     std::cout << "Execution space: Default" << std::endl;
 #endif
     std::cout << "Execution space concurrency: "
-              << execution_space::concurrency() << std::endl;
+              << space.concurrency() << std::endl;
     space.print_configuration( std::cout, opts.verbose );
     benchmark_dindex< TOrdinal, TSize, TScalar, TAcc >( opts, space );
   }
