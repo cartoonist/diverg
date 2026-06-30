@@ -146,16 +146,20 @@ if(DIVERG_ETI)
     list(APPEND DIVERG_ETI_SOURCES
       src/eti/hbitvector_cuda.cpp
       src/eti/range_sparse_cuda.cpp)
-    # ETI sources include Kokkos headers with KOKKOS_FUNCTION decorators
-    # which expand to `__device__ __host__` which requires a CUDA compiler.
-    # Enable the CUDA language in CMake if not already active (find_package(Kokkos)
+    # Enable the CUDA in CMake if not already active (`find_package(Kokkos)`
     # may not do this automatically for downstream projects).
     enable_language(CUDA)
+    # The ETI sources contain Kokkos device code, so compile them as the CUDA
+    # language when `DIVERG_ENABLE_CUDA` is ON.
+    #
+    # NOTE: Kokkos is bundled with `Kokkos_ENABLE_COMPILE_AS_CMAKE_LANGUAGE` in
+    # ETI builds (see `ext/external.cmake`), so `KOKKOS_COMPILE_LANGUAGE` is
+    # CUDA and Kokkos propagates all the nvcc options it needs to CUDA-language
+    # targets via `Kokkos::kokkos` -- so no nvcc flags are set manually. Host
+    # codes stay on the host compiler, since there is no global nvcc launcher in
+    # this mode.
     set_source_files_properties(
-      src/eti/hbitvector.cpp
-      src/eti/hbitvector_cuda.cpp
-      src/eti/range_sparse.cpp
-      src/eti/range_sparse_cuda.cpp
+      ${DIVERG_ETI_SOURCES}
       PROPERTIES LANGUAGE CUDA)
   endif()
   add_library(libdiverg ${DIVERG_ETI_SOURCES})

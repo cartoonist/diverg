@@ -22,6 +22,17 @@ endif(DIVERG_ENABLE_CUDA)
 # Defining target 'rcrs_benchmark': Range CRS matrix operations benchmark
 set(RCRS_BENCH_SOURCES "src/rcrs_benchmark.cpp")
 add_executable(rcrs_benchmark ${RCRS_BENCH_SOURCES})
+if(DIVERG_ENABLE_CUDA AND DIVERG_ETI)
+  # ETI builds do not use nvcc_wrapper compile launcher to build the targets;
+  # i.e. `Kokkos_ENABLE_COMPILE_AS_CMAKE_LANGUAGE` is on. So, every TU including
+  # Kokkos must be compiled in CUDA language (nvcc) and built as relocatable
+  # device code to match Kokkos/desul.
+  #
+  # Without ETI, Kokkos uses the nvcc_wrapper launcher and host TUs are already
+  # handled through nvcc, so they should not be re-tagged.
+  set_source_files_properties(${RCRS_BENCH_SOURCES} PROPERTIES LANGUAGE CUDA)
+  set_target_properties(rcrs_benchmark PROPERTIES CUDA_SEPARABLE_COMPILATION ON)
+endif()
 target_compile_options(rcrs_benchmark PRIVATE ${DIVERG_BENCHMARK_DEFAULT_CXXOPS})
 target_link_options(rcrs_benchmark PRIVATE ${DIVERG_BENCHMARK_DEFAULT_LDOPS})
 target_include_directories(rcrs_benchmark
