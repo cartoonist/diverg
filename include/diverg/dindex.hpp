@@ -515,12 +515,12 @@ namespace diverg {
                           std::false_type /* needs_streaming */,
                           TExecSpace space = {} )
     {
-      auto a_entries = dindex1.entries_device_view( space );
-      auto a_rowmap = dindex1.rowmap_device_view( space );
-      auto b_entries = dindex2.entries_device_view( space );
-      auto b_rowmap = dindex2.rowmap_device_view( space );
-      auto c_entries = TMutableCRSMatrix::make_entries_device_view( space );
-      auto c_rowmap = TMutableCRSMatrix::make_rowmap_device_view( space );
+      auto a_entries = diverg::entries_device_view( dindex1, space );
+      auto a_rowmap = diverg::rowmap_device_view( dindex1, space );
+      auto b_entries = diverg::entries_device_view( dindex2, space );
+      auto b_rowmap = diverg::rowmap_device_view( dindex2, space );
+      auto c_entries = diverg::make_entries_device_view< TMutableCRSMatrix >( space );
+      auto c_rowmap = diverg::make_rowmap_device_view< TMutableCRSMatrix >( space );
 
       SparseRangeHandle handle( dindex1, dindex2, space );
       range_spadd( handle, a_rowmap, a_entries, b_rowmap, b_entries, c_rowmap,
@@ -793,25 +793,25 @@ namespace diverg {
       auto ncols = ra.numCols();
 
       // rA^dlo . (rA + rI)^(dup - dlo) (device)
-      auto d_entries = rcrsmatrix_t::make_entries_device_view( space );
-      auto d_rowmap = rcrsmatrix_t::make_rowmap_device_view( space );
+      auto d_entries = diverg::make_entries_device_view< rcrsmatrix_t >( space );
+      auto d_rowmap = diverg::make_rowmap_device_view< rcrsmatrix_t >( space );
       size_type d_nnz = 0;
 
       {
         // (rA + rI)^(dup - dlo) (device)
-        auto raid_entries = rcrsmatrix_t::make_entries_device_view( space );
-        auto raid_rowmap = rcrsmatrix_t::make_rowmap_device_view( space );
+        auto raid_entries = diverg::make_entries_device_view< rcrsmatrix_t >( space );
+        auto raid_rowmap = diverg::make_rowmap_device_view< rcrsmatrix_t >( space );
         size_type raid_nnz = 0;
 
         // rA^dlo (device)
-        auto rad_entries = rcrsmatrix_t::make_entries_device_view( space );
-        auto rad_rowmap = rcrsmatrix_t::make_rowmap_device_view( space );
+        auto rad_entries = diverg::make_entries_device_view< rcrsmatrix_t >( space );
+        auto rad_rowmap = diverg::make_rowmap_device_view< rcrsmatrix_t >( space );
         size_type rad_nnz = 0;
 
         {
           // rA + rI (device)
-          auto rai_entries = rcrsmatrix_t::make_entries_device_view( space );
-          auto rai_rowmap = rcrsmatrix_t::make_rowmap_device_view( space );
+          auto rai_entries = diverg::make_entries_device_view< rcrsmatrix_t >( space );
+          auto rai_rowmap = diverg::make_rowmap_device_view< rcrsmatrix_t >( space );
           size_type rai_nnz = 0;
 
           {
@@ -819,8 +819,8 @@ namespace diverg {
             if ( timer2_ptr ) timer2_ptr->reset();
 #endif
             // rA (device)
-            auto ra_entries = ra.entries_device_view( space );
-            auto ra_rowmap = ra.rowmap_device_view( space );
+            auto ra_entries = diverg::entries_device_view( ra, space );
+            auto ra_rowmap = diverg::rowmap_device_view( ra, space );
 
 #ifdef DIVERG_STATS
             if ( timer2_ptr ) {
@@ -833,8 +833,8 @@ namespace diverg {
 
             {
               // rI (device)
-              auto i_entries = rcrsmatrix_t::make_entries_device_view( space );
-              auto i_rowmap = rcrsmatrix_t::make_rowmap_device_view( space );
+              auto i_entries = diverg::make_entries_device_view< rcrsmatrix_t >( space );
+              auto i_rowmap = diverg::make_rowmap_device_view< rcrsmatrix_t >( space );
 #ifdef DIVERG_STATS
               if ( timer1_ptr ) timer1_ptr->reset();
               if ( timer2_ptr ) timer2_ptr->reset();
@@ -906,7 +906,7 @@ namespace diverg {
         }
 #endif
       } // free: rA^dlo and (rA + rI)^(dup - dlo)
-      return TRCRSMatrix( ncols, d_entries, d_rowmap, d_nnz );
+      return diverg::make_crs_matrix< TRCRSMatrix >( ncols, d_entries, d_rowmap, d_nnz );
     }
   }  /* --- end of namespace util --- */
 }  /* --- end of namespace diverg --- */

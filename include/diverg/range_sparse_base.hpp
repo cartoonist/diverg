@@ -23,6 +23,9 @@
 #include <Kokkos_Core.hpp>
 #include <Kokkos_NestedSort.hpp>
 
+#include "crs_matrix.hpp"
+#include "crs_matrix_device.hpp"
+
 
 namespace diverg {
   // Accumulator tag
@@ -501,7 +504,7 @@ namespace diverg {
     using size_type = typename TRCRSMatrix::size_type;
     using execution_space = TExecSpace;
     using entries_device_view_type =
-        typename TRCRSMatrix::template entries_device_view_type< execution_space >;
+        diverg::entries_device_view_type< TRCRSMatrix, execution_space >;
     /* === LIFECYCLE === */
     SparseRangeHandle() = delete;
 

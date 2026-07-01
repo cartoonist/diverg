@@ -24,7 +24,6 @@
 
 #include <Kokkos_Core.hpp>
 
-#include "crs_matrix.hpp"
 #include "range_sparse_base.hpp"
 #include "hbitvector.hpp"
 #include "basic_types.hpp"
@@ -102,12 +101,12 @@ namespace diverg {
     static_assert( crs_matrix::is_range_crs_matrix< rcrsmatrix_t >::value,
                    "matrix should be in Range CRS format." );
 
-    auto i_entries = rcrsmatrix_t::make_entries_device_view( space );
-    auto i_rowmap = rcrsmatrix_t::make_rowmap_device_view( space );
+    auto i_entries = diverg::make_entries_device_view< rcrsmatrix_t >( space );
+    auto i_rowmap = diverg::make_rowmap_device_view< rcrsmatrix_t >( space );
 
     create_range_identity_matrix( i_rowmap, i_entries, n );
 
-    return rcrsmatrix_t( n, i_entries, i_rowmap, n /* nnz */ );
+    return diverg::make_crs_matrix< rcrsmatrix_t >( n, i_entries, i_rowmap, n /* nnz */ );
   }
 
   template< typename THandle,
@@ -446,13 +445,13 @@ namespace diverg {
     assert( a.numCols() == b.numCols() );
     assert( a.numRows() == b.numRows() );
 
-    auto a_entries = a.entries_device_view( space );
-    auto a_rowmap = a.rowmap_device_view( space );
-    auto b_entries = b.entries_device_view( space );
-    auto b_rowmap = b.rowmap_device_view( space );
+    auto a_entries = diverg::entries_device_view( a, space );
+    auto a_rowmap = diverg::rowmap_device_view( a, space );
+    auto b_entries = diverg::entries_device_view( b, space );
+    auto b_rowmap = diverg::rowmap_device_view( b, space );
 
-    auto c_entries = range_crsmatrix_t::make_entries_device_view( space );
-    auto c_rowmap = range_crsmatrix_t::make_rowmap_device_view( space );
+    auto c_entries = diverg::make_entries_device_view< range_crsmatrix_t >( space );
+    auto c_rowmap = diverg::make_rowmap_device_view< range_crsmatrix_t >( space );
 
     SparseRangeHandle handle( a, b, space );
 
@@ -465,7 +464,7 @@ namespace diverg {
     // would be an extra copy here and the `c_entries` and `c_rowmap` cannot be
     // moved when the views are on the same memory space (the RCRS ctor does call
     // `deep_copy`).
-    return TRCRSMatrix( a.numCols(), c_entries, c_rowmap, nnz );
+    return diverg::make_crs_matrix< TRCRSMatrix >( a.numCols(), c_entries, c_rowmap, nnz );
   }
 
   template< typename TRCRSMatrix,
@@ -2303,13 +2302,13 @@ namespace diverg {
     DIVERG_ASSERT( a.numCols() <= std::numeric_limits< ordinal_type >::max() - 1 );
     DIVERG_ASSERT( b.numCols() <= std::numeric_limits< ordinal_type >::max() - 1 );
 
-    auto a_entries = a.entries_device_view( config.space );
-    auto a_rowmap = a.rowmap_device_view( config.space );
-    auto b_entries = b.entries_device_view( config.space );
-    auto b_rowmap = b.rowmap_device_view( config.space );
+    auto a_entries = diverg::entries_device_view( a, config.space );
+    auto a_rowmap = diverg::rowmap_device_view( a, config.space );
+    auto b_entries = diverg::entries_device_view( b, config.space );
+    auto b_rowmap = diverg::rowmap_device_view( b, config.space );
 
-    auto c_entries = range_crsmatrix_t::make_entries_device_view( config.space );
-    auto c_rowmap = range_crsmatrix_t::make_rowmap_device_view( config.space );
+    auto c_entries = diverg::make_entries_device_view< range_crsmatrix_t >( config.space );
+    auto c_rowmap = diverg::make_rowmap_device_view< range_crsmatrix_t >( config.space );
 
     SparseRangeHandle handle( a, b, config.space );
 
@@ -2320,7 +2319,7 @@ namespace diverg {
     // would be an extra copy here and the `c_entries` and `c_rowmap` cannot be
     // moved when the views are on the same memory space (the RCRS ctor does call
     // `deep_copy`).
-    return TRCRSMatrix( b.numCols(), c_entries, c_rowmap, nnz );
+    return diverg::make_crs_matrix< TRCRSMatrix >( b.numCols(), c_entries, c_rowmap, nnz );
   }
 
   template< typename TRCRSMatrix,
@@ -2347,17 +2346,17 @@ namespace diverg {
   {
     typedef TRCRSMatrix rcrsmatrix_t;
 
-    auto a_entries = a.entries_device_view( config.space );
-    auto a_rowmap = a.rowmap_device_view( config.space );
+    auto a_entries = diverg::entries_device_view( a, config.space );
+    auto a_rowmap = diverg::rowmap_device_view( a, config.space );
 
-    auto c_entries = rcrsmatrix_t::make_entries_device_view( config.space );
-    auto c_rowmap = rcrsmatrix_t::make_rowmap_device_view( config.space );
+    auto c_entries = diverg::make_entries_device_view< rcrsmatrix_t >( config.space );
+    auto c_rowmap = diverg::make_rowmap_device_view< rcrsmatrix_t >( config.space );
 
     SparseRangeHandle handle( a, a, config.space );
     auto nnz = range_power_inplace( handle, a_rowmap, a_entries, c_rowmap,
                                     c_entries, k, config );
 
-    return TRCRSMatrix( a.numCols(), c_entries, c_rowmap, nnz );
+    return diverg::make_crs_matrix< TRCRSMatrix >( a.numCols(), c_entries, c_rowmap, nnz );
   }
 
   template< typename TRCRSMatrix,

@@ -38,14 +38,14 @@ check_identical( TRangeCRSMatrix& actual, TRangeCRSMatrix& expected )
   REQUIRE( actual.numCols() == expected.numCols() );
   REQUIRE( actual.nnz() == expected.nnz() );
 
-  auto a_entries = actual.entries_view();
-  auto e_entries = expected.entries_view();
+  auto a_entries = diverg::entries_view( actual );
+  auto e_entries = diverg::entries_view( expected );
   REQUIRE( a_entries.extent( 0 ) == e_entries.extent( 0 ) );
   for ( std::size_t i = 0; i < e_entries.extent( 0 ); ++i )
     REQUIRE( a_entries( i ) == e_entries( i ) );
 
-  auto a_rowmap = actual.rowmap_view();
-  auto e_rowmap = expected.rowmap_view();
+  auto a_rowmap = diverg::rowmap_view( actual );
+  auto e_rowmap = diverg::rowmap_view( expected );
   REQUIRE( a_rowmap.extent( 0 ) == e_rowmap.extent( 0 ) );
   for ( std::size_t i = 0; i < e_rowmap.extent( 0 ); ++i )
     REQUIRE( a_rowmap( i ) == e_rowmap( i ) );

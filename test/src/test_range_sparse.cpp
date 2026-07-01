@@ -47,11 +47,11 @@ SCENARIO( "Sanity check of Kokkos views created by CRSMatrix", "[range_sparse]" 
 
     WHEN( "Create a Kokkos view on host for CRSMatrix" )
     {
-      auto h_a_entries = ra.entries_view();
-      auto h_a_row_map = ra.rowmap_view();
+      auto h_a_entries = diverg::entries_view( ra );
+      auto h_a_row_map = diverg::rowmap_view( ra );
 
-      auto a_entries = ra.entries_device_view( host_space{} );
-      auto a_row_map = ra.rowmap_device_view( host_space{} );
+      auto a_entries = diverg::entries_device_view( ra, host_space{} );
+      auto a_row_map = diverg::rowmap_device_view( ra, host_space{} );
 
       THEN( "The data should not be copied" )
       {
@@ -62,11 +62,11 @@ SCENARIO( "Sanity check of Kokkos views created by CRSMatrix", "[range_sparse]" 
 
     WHEN( "Create a Device mirror view for CRSMatrix" )
     {
-      auto h_a_entries = ra.entries_view();
-      auto h_a_row_map = ra.rowmap_view();
+      auto h_a_entries = diverg::entries_view( ra );
+      auto h_a_row_map = diverg::rowmap_view( ra );
 
-      auto a_entries = ra.entries_device_view( Kokkos::DefaultExecutionSpace{} );
-      auto a_row_map = ra.rowmap_device_view( Kokkos::DefaultExecutionSpace{} );
+      auto a_entries = diverg::entries_device_view( ra, Kokkos::DefaultExecutionSpace{} );
+      auto a_row_map = diverg::rowmap_device_view( ra, Kokkos::DefaultExecutionSpace{} );
 
       auto ch_a_entries = Kokkos::create_mirror_view( a_entries );
       auto ch_a_row_map = Kokkos::create_mirror_view( a_row_map );
@@ -331,8 +331,8 @@ is_same( TXCRSMatrix& x_mat, TRCRSMatrix& r_mat )
        || static_cast< size_type >( x_mat.nnz() ) != static_cast< size_type >( b_mat.nnz() ) )
     return false;
 
-  auto b_mat_entries = b_mat.entries_device_view( xcrs_execution_space{} );
-  auto b_mat_row_map = b_mat.rowmap_device_view( xcrs_execution_space{} );
+  auto b_mat_entries = diverg::entries_device_view( b_mat, xcrs_execution_space{} );
+  auto b_mat_row_map = diverg::rowmap_device_view( b_mat, xcrs_execution_space{} );
 
   return _is_same( x_mat.graph.entries, x_mat.graph.row_map, b_mat_entries, b_mat_row_map );
 }
@@ -545,8 +545,8 @@ TEMPLATE_SCENARIO_SIG( "Validation and verification of range SpGEMM", "[range_sp
       auto rc = range_spgemm( rrand_mat, rrand_mat, config_type{} );
 
       execution_space space;
-      auto entr = rc.entries_device_view( space );
-      auto rwmp = rcrsmatrix_t::make_rowmap_device_view( space );
+      auto entr = diverg::entries_device_view( rc, space );
+      auto rwmp = diverg::make_rowmap_device_view< rcrsmatrix_t >( space );
       auto nnz = crs_matrix::nnz( entr, rwmp, crs_matrix::RangeGroup{} );
       REQUIRE( nnz == rc.nnz() );
 
@@ -573,8 +573,8 @@ TEMPLATE_SCENARIO_SIG( "Validation and verification of range SpGEMM", "[range_sp
       auto rc = range_spgemm( ra, ra, config_type{} );
 
       execution_space space;
-      auto entr = rc.entries_device_view( space );
-      auto rwmp = rcrsmatrix_t::make_rowmap_device_view( space );
+      auto entr = diverg::entries_device_view( rc, space );
+      auto rwmp = diverg::make_rowmap_device_view< rcrsmatrix_t >( space );
       auto nnz = crs_matrix::nnz( entr, rwmp, crs_matrix::RangeGroup{} );
       REQUIRE( nnz == rc.nnz() );
 
@@ -619,8 +619,8 @@ TEMPLATE_SCENARIO_SIG( "Validation and verification of range power", "[range_spa
       auto rc = range_power( rrand_mat, K, config_type{} );
 
       execution_space space;
-      auto entr = rc.entries_device_view( space );
-      auto rwmp = rcrsmatrix_t::make_rowmap_device_view( space );
+      auto entr = diverg::entries_device_view( rc, space );
+      auto rwmp = diverg::make_rowmap_device_view< rcrsmatrix_t >( space );
       auto nnz = crs_matrix::nnz( entr, rwmp, crs_matrix::RangeGroup{} );
       REQUIRE( nnz == rc.nnz() );
 
@@ -647,8 +647,8 @@ TEMPLATE_SCENARIO_SIG( "Validation and verification of range power", "[range_spa
       auto rc = range_power( ra, K, config_type{} );
 
       execution_space space;
-      auto entr = rc.entries_device_view( space );
-      auto rwmp = rcrsmatrix_t::make_rowmap_device_view( space );
+      auto entr = diverg::entries_device_view( rc, space );
+      auto rwmp = diverg::make_rowmap_device_view< rcrsmatrix_t >( space );
       auto nnz = crs_matrix::nnz( entr, rwmp, crs_matrix::RangeGroup{} );
       REQUIRE( nnz == rc.nnz() );
 
@@ -693,8 +693,8 @@ TEMPLATE_SCENARIO_SIG( "Validation and verification of range SpAdd", "[range_spa
       auto rc = range_spadd( rrand_mat1, rrand_mat2 );
 
       execution_space space;
-      auto entr = rc.entries_device_view( space );
-      auto rwmp = rcrsmatrix_t::make_rowmap_device_view( space );
+      auto entr = diverg::entries_device_view( rc, space );
+      auto rwmp = diverg::make_rowmap_device_view< rcrsmatrix_t >( space );
       auto nnz = crs_matrix::nnz( entr, rwmp, crs_matrix::RangeGroup{} );
       REQUIRE( nnz == rc.nnz() );
 
@@ -724,8 +724,8 @@ TEMPLATE_SCENARIO_SIG( "Validation and verification of range SpAdd", "[range_spa
       auto rc = range_spadd( ra, rI );
 
       execution_space space;
-      auto entr = rc.entries_device_view( space );
-      auto rwmp = rcrsmatrix_t::make_rowmap_device_view( space );
+      auto entr = diverg::entries_device_view( rc, space );
+      auto rwmp = diverg::make_rowmap_device_view< rcrsmatrix_t >( space );
       auto nnz = crs_matrix::nnz( entr, rwmp, crs_matrix::RangeGroup{} );
       REQUIRE( nnz == rc.nnz() );
 
