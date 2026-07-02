@@ -300,6 +300,8 @@ load_graph( std::string const& graph_path, std::string const& format,
   TGraph graph;
   typename TGraph::dynamic_type dyn_graph;
 
+  std::cout << "Loading graph: " << graph_path << std::endl;
+
   auto load_versioned_gfa = []( auto& dyn_graph, auto& graph_path, bool sorted,
                                 auto version ) {
     std::ifstream ifs( graph_path, std::ifstream::in | std::ifstream::binary );
@@ -349,11 +351,9 @@ load_graph( std::string const& graph_path, std::string const& format,
     gum::util::cuthill_mckee_sort( dyn_graph );
   }
   else if ( ordering == "random" ) {
-    if ( seed == 0 ) {
-      seed = diverg::random::rd();
-      std::cout << "Random seed: " << seed << std::endl;
-    }
+    if ( seed == 0 ) seed = diverg::random::rd();
     std::cout << "Ordering: random" << std::endl;
+    std::cout << "Random seed: " << seed << std::endl;
     auto n = static_cast< std::size_t >( dyn_graph.get_node_count() );
     std::vector< rank_type > perm( n );
     std::iota( perm.begin(), perm.end(), static_cast< rank_type >( 0 ) );
@@ -362,7 +362,7 @@ load_graph( std::string const& graph_path, std::string const& format,
     dyn_graph.sort_nodes( perm );
   }
   else if ( ordering == "min-breaks" ) {
-    std::cout << "Ordering: min-breaks..." << std::endl;
+    std::cout << "Ordering: min-breaks" << std::endl;
     gum::util::min_breaks_sort( dyn_graph );
   }
   else {
