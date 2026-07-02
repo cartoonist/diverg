@@ -19,6 +19,7 @@
 #include <gum/graph.hpp>
 #include <gum/io_utils.hpp>
 #include <diverg/dindex.hpp>
+#include <diverg/dindex_eti.hpp>
 
 #include <KokkosSparse_CrsMatrix.hpp>
 
@@ -168,6 +169,65 @@ SCENARIO( "Graph adjacency matrix construction", "[dindex]" )
       THEN( "It should be identical to the directly-built whole-graph range matrix" )
       {
         check_identical( actual, expected );
+      }
+    }
+  }
+}
+
+SCENARIO( "Distance index construction templated/compiled boundary", "[dindex]" )
+{
+  typedef diverg::CRSMatrix< diverg::crs_matrix::RangeDynamic, bool, uint32_t, uint64_t > range_crsmatrix_t;
+  typedef gum::SeqGraph< gum::Succinct > graph_type;
+
+  GIVEN( "A range adjacency matrix and a distance range" )
+  {
+    std::string graph_path = test_data_dir + "/multi/multi.gfa";
+    graph_type graph;
+    gum::util::load( graph, graph_path, gum::util::GFAFormat{}, true );
+
+    unsigned int dmin = 1;
+    unsigned int dmax = 8;
+
+    auto ra = diverg::util::range_adjacency_matrix< range_crsmatrix_t >( graph );
+
+    WHEN( "the compiled (non-template) boundary is called" )
+    {
+      auto boundary = diverg::util::create_distance_index( ra, dmin, dmax );
+      auto templated = diverg::util::create_distance_index(
+          ra, dmin, dmax, diverg::DefaultSparseConfiguration{} );
+
+      THEN( "it is identical to the templated implementation" )
+      {
+        REQUIRE( boundary.numRows() > 0 );
+        check_identical( boundary, templated );
+      }
+    }
+  }
+}
+
+SCENARIO( "create_distance_index ETI supports the uint32/uint32 combination", "[dindex]" )
+{
+  typedef diverg::CRSMatrix< diverg::crs_matrix::RangeDynamic, bool, uint32_t, uint32_t > range_crsmatrix32_t;
+  typedef gum::SeqGraph< gum::Succinct > graph_type;
+
+  GIVEN( "A uint32/uint32 range adjacency matrix" )
+  {
+    std::string graph_path = test_data_dir + "/multi/multi.gfa";
+    graph_type graph;
+    gum::util::load( graph, graph_path, gum::util::GFAFormat{}, true );
+
+    auto ra = diverg::util::range_adjacency_matrix< range_crsmatrix32_t >( graph );
+
+    WHEN( "the compiled (uint32/uint32) boundary is called" )
+    {
+      auto boundary = diverg::util::create_distance_index( ra, 1, 3 );
+      auto templated = diverg::util::create_distance_index(
+          ra, 1, 3, diverg::DefaultSparseConfiguration{} );
+
+      THEN( "it is identical to the templated implementation" )
+      {
+        REQUIRE( boundary.numRows() > 0 );
+        check_identical( boundary, templated );
       }
     }
   }

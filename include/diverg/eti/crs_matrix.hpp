@@ -40,6 +40,18 @@ namespace diverg {
   DIVERG_ETI_EXTERN_CLASS( CRSMatrix<crs_matrix::RangeFullyBuffered, bool, uint32_t, uint64_t> )
   DIVERG_ETI_EXTERN_CLASS( CRSMatrix<crs_matrix::RangeCompressed,    bool, uint32_t, uint64_t> )
 
+  /* === Basic group (size = uint32_t) === */
+  DIVERG_ETI_EXTERN_CLASS( CRSMatrix<crs_matrix::Dynamic,       bool, uint32_t, uint32_t> )
+  DIVERG_ETI_EXTERN_CLASS( CRSMatrix<crs_matrix::Buffered,      bool, uint32_t, uint32_t> )
+  DIVERG_ETI_EXTERN_CLASS( CRSMatrix<crs_matrix::FullyBuffered, bool, uint32_t, uint32_t> )
+  DIVERG_ETI_EXTERN_CLASS( CRSMatrix<crs_matrix::Compressed,    bool, uint32_t, uint32_t> )
+
+  /* === Range group (size = uint32_t) === */
+  DIVERG_ETI_EXTERN_CLASS( CRSMatrix<crs_matrix::RangeDynamic,       bool, uint32_t, uint32_t> )
+  DIVERG_ETI_EXTERN_CLASS( CRSMatrix<crs_matrix::RangeBuffered,      bool, uint32_t, uint32_t> )
+  DIVERG_ETI_EXTERN_CLASS( CRSMatrix<crs_matrix::RangeFullyBuffered, bool, uint32_t, uint32_t> )
+  DIVERG_ETI_EXTERN_CLASS( CRSMatrix<crs_matrix::RangeCompressed,    bool, uint32_t, uint32_t> )
+
 }  /* --- end of namespace diverg --- */
 
 #endif  /* --- #ifndef DIVERG_ETI_CRSMATRIX_HPP__ --- */
